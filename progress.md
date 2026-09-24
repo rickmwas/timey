@@ -1,10 +1,10 @@
 # Project Progress & Status Tracker — Timy
 
 ## 1. Project Phase & Milestone
-- **Current Phase**: Phase 0 — Engineering Setup, Domain Modeling & Context Foundation
-- **Current Milestone**: Milestone 0.1 — Repository Initialization & Technical Baseline
+- **Current Phase**: Phase 1 — Core System Scaffolding, Relational Data Modeling & Auth Foundation
+- **Current Milestone**: Milestone 1.1 — Next.js 14+ Fullstack Scaffolding & Prisma Data Architecture
 - **Date**: September 24, 2026
-- **Status**: IN PROGRESS (Foundation Setup)
+- **Status**: IN PROGRESS (Phase 1 Execution)
 
 ---
 
@@ -18,22 +18,28 @@
 - [x] Authored 15-rule AI and developer protocol (`ai-workflow.md`).
 - [x] Established university-appropriate visual design direction (`design.md`).
 - [x] Created UI component catalog and interaction patterns (`ui-registry.md`).
+- [x] Authored comprehensive documentation suite in `docs/`:
+  - `docs/decisions/TDR-001-technology-stack.md`
+  - `docs/scope/mvp-scope.md`
+  - `docs/specs/SPEC-001-auth-and-rbac.md`
+  - `docs/specs/SPEC-002-timetable-ingestion-pipeline.md`
+  - `docs/specs/SPEC-003-venue-conflict-detection.md`
+  - `docs/specs/SPEC-004-rescheduling-and-notifications.md`
+- [x] Verified Phase 0 requirements and received user sign-off to proceed to Phase 1.
 
 ---
 
-## 3. In Progress (Active Now)
-- [ ] Completing `docs/` documentation suite:
-  - `docs/README.md`
-  - `docs/decisions/` (TDR-001 Stack, TDR-002 Database & Schema, TDR-003 Ingestion Pipeline)
-  - `docs/scope/` (MVP vs Phase 2 vs Future)
-  - `docs/specs/` (SPEC-001 Auth, SPEC-002 Ingestion, SPEC-003 Venue & Conflict Detection, SPEC-004 Student Timetable, SPEC-005 Rescheduling, SPEC-006 Notifications)
-  - `docs/reviews/`
-- [ ] Producing Comprehensive Engineering Understanding Report for user sign-off.
+## 3. In Progress (Active Now — Phase 1)
+- [ ] **Milestone 1.1**: Next.js 14+ App Router project scaffolding with TypeScript, Tailwind CSS, Lucide React, and path aliases.
+- [ ] **Milestone 1.2**: Prisma ORM schema initialization with comprehensive Kisii University relational data model (`User`, `Role`, `Department`, `Cohort`, `Course`, `Venue`, `TimetableEntry`, `ImportJob`, `Notification`).
+- [ ] **Milestone 1.3**: Kisii University seed dataset (`prisma/seed.ts`) covering LH 26, Computing Sciences cohorts, faculty, courses, and venues.
+- [ ] **Milestone 1.4**: Deterministic Conflict Detection Engine implementation and pure unit test coverage (`SPEC-003`).
+- [ ] **Milestone 1.5**: Authentication schemas, password hashing, and role-based session guards (`SPEC-001`).
 
 ---
 
 ## 4. Blocked / Pending Items
-- **None currently blocking**. Awaiting user review and sign-off on the Engineering Understanding Report before initiating code scaffolding.
+- **None currently blocking**. Ready to scaffold project dependencies and database schema.
 
 ---
 
