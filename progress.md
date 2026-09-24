@@ -2,9 +2,9 @@
 
 ## 1. Project Phase & Milestone
 - **Current Phase**: Phase 1 — Core System Scaffolding, Relational Data Modeling & Auth Foundation
-- **Current Milestone**: Milestone 1.1 — Next.js 14+ Fullstack Scaffolding & Prisma Data Architecture
+- **Current Milestone**: Milestone 1.3 — Kisii University Domain Seed Dataset & Backend Foundation
 - **Date**: September 24, 2026
-- **Status**: IN PROGRESS (Phase 1 Execution)
+- **Status**: IN PROGRESS (Milestone 1.3 Execution)
 
 ---
 
@@ -26,20 +26,21 @@
   - `docs/specs/SPEC-003-venue-conflict-detection.md`
   - `docs/specs/SPEC-004-rescheduling-and-notifications.md`
 - [x] Verified Phase 0 requirements and received user sign-off to proceed to Phase 1.
+- [x] Configured minimal baseline: `package.json`, `tsconfig.json`, `tailwind.config.ts`, `.env`, and relational `prisma/schema.prisma`.
+- [x] Completed **Milestone 1.1**: Minimal project scaffolding & dependency installation (frontend held off per user direction).
+- [x] Completed **Milestone 1.2**: Prisma Client generation & schema validation (`npx prisma generate` clean, 0 TypeScript errors).
 
 ---
 
 ## 3. In Progress (Active Now — Phase 1)
-- [ ] **Milestone 1.1**: Next.js 14+ App Router project scaffolding with TypeScript, Tailwind CSS, Lucide React, and path aliases.
-- [ ] **Milestone 1.2**: Prisma ORM schema initialization with comprehensive Kisii University relational data model (`User`, `Role`, `Department`, `Cohort`, `Course`, `Venue`, `TimetableEntry`, `ImportJob`, `Notification`).
-- [ ] **Milestone 1.3**: Kisii University seed dataset (`prisma/seed.ts`) covering LH 26, Computing Sciences cohorts, faculty, courses, and venues.
-- [ ] **Milestone 1.4**: Deterministic Conflict Detection Engine implementation and pure unit test coverage (`SPEC-003`).
-- [ ] **Milestone 1.5**: Authentication schemas, password hashing, and role-based session guards (`SPEC-001`).
+- [ ] **Milestone 1.3**: Kisii University domain seed script (`prisma/seed.ts`) with LH 26, Computing Sciences cohorts, faculty, courses, and venues.
+- [ ] **Milestone 1.4**: Deterministic Conflict Detection Engine implementation & unit tests (`SPEC-003`).
+- [ ] **Milestone 1.5**: Auth schemas, password hashing, and API route guards (`SPEC-001`).
 
 ---
 
 ## 4. Blocked / Pending Items
-- **None currently blocking**. Ready to scaffold project dependencies and database schema.
+- **None currently blocking**. Minimal environment verified and ready for domain seeding and backend logic.
 
 ---
 

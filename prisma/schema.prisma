@@ -1,0 +1,253 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  STUDENT
+  LECTURER
+  TIMETABLE_OFFICER
+  ADMIN
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum SlotStatus {
+  ACTIVE
+  RESCHEDULED
+  CANCELLED
+  MOVED
+}
+
+enum ImportStatus {
+  PENDING
+  PROCESSING
+  VALIDATED
+  CONFLICTS_DETECTED
+  COMMITTED
+  DISCARDED
+  FAILED
+}
+
+enum NotificationType {
+  VENUE_SWAP
+  CLASS_RESCHEDULED
+  CLASS_CANCELLED
+  ANNOUNCEMENT
+  SYSTEM_ALERT
+  GENERAL
+}
+
+model Department {
+  id        String   @id @default(uuid())
+  code      String   @unique // e.g. "COMP_SCI"
+  name      String   // e.g. "Department of Computing Sciences"
+  school    String   // e.g. "School of Information Science and Technology"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cohorts   Cohort[]
+  courses   Course[]
+  users     User[]
+}
+
+model Cohort {
+  id           String     @id @default(uuid())
+  code         String     @unique // e.g. "IN16-Y2-S1"
+  name         String     // e.g. "BSc Software Engineering Year 2"
+  expectedSize Int        @default(50)
+  departmentId String
+  academicYear String     // e.g. "2026/2027"
+  semester     Int        @default(1)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  students     User[]
+  slots        TimetableEntry[]
+  announcements Announcement[]
+}
+
+model Course {
+  id           String     @id @default(uuid())
+  code         String     @unique // e.g. "SOEN 311"
+  title        String     // e.g. "Advanced Software Engineering"
+  departmentId String
+  credits      Int        @default(3)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  slots        TimetableEntry[]
+  announcements Announcement[]
+}
+
+model Venue {
+  id        String   @id @default(uuid())
+  code      String   @unique // e.g. "LH_26"
+  name      String   @unique // e.g. "LH 26"
+  building  String   // e.g. "Science & Computing Complex"
+  floor     Int      @default(1)
+  capacity  Int      @default(100)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  aliases   VenueAlias[]
+  slots     TimetableEntry[] @relation("VenueAssigned")
+  rescheduledSlots TimetableEntry[] @relation("RescheduledVenueAssigned")
+}
+
+model VenueAlias {
+  id        String   @id @default(uuid())
+  alias     String   @unique // e.g. "LH-26", "Lecture Hall 26", "LH26"
+  venueId   String
+  createdAt DateTime @default(now())
+
+  venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  identifier    String    @unique // Reg No e.g. "IN16/00015/24" or Staff No "STF/089"
+  fullName      String
+  passwordHash  String
+  role          Role      @default(STUDENT)
+  cohortId      String?
+  departmentId  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  cohort        Cohort?        @relation(fields: [cohortId], references: [id], onDelete: SetNull)
+  department    Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  teachingSlots TimetableEntry[] @relation("LecturerSlots")
+  notifications Notification[]
+  authoredAnnouncements Announcement[] @relation("AuthorAnnouncements")
+  uploadedJobs  ImportJob[]    @relation("UploadedBy")
+}
+
+model TimetableEntry {
+  id           String     @id @default(uuid())
+  courseId     String
+  lecturerId   String
+  venueId      String
+  cohortId     String
+  day          DayOfWeek
+  startTime    String     // Format: "HH:mm", e.g. "10:00"
+  endTime      String     // Format: "HH:mm", e.g. "13:00"
+  status       SlotStatus @default(ACTIVE)
+
+  // Rescheduling attributes (SPEC-004)
+  rescheduledToVenueId   String?
+  rescheduledStartTime   String?
+  rescheduledEndTime     String?
+  rescheduledDay         DayOfWeek?
+  rescheduleReason       String?
+
+  academicYear String     @default("2026/2027")
+  semester     Int        @default(1)
+  version      Int        @default(1)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  course       Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lecturer     User       @relation("LecturerSlots", fields: [lecturerId], references: [id], onDelete: Restrict)
+  venue        Venue      @relation("VenueAssigned", fields: [venueId], references: [id], onDelete: Restrict)
+  rescheduledVenue Venue? @relation("RescheduledVenueAssigned", fields: [rescheduledToVenueId], references: [id], onDelete: SetNull)
+  cohort       Cohort     @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+
+  @@index([cohortId, day])
+  @@index([venueId, day])
+  @@index([lecturerId, day])
+}
+
+model ImportJob {
+  id           String       @id @default(uuid())
+  fileName     String
+  fileSize     Int
+  mimeType     String
+  uploadedById String
+  status       ImportStatus @default(PENDING)
+  totalRows    Int          @default(0)
+  validRows    Int          @default(0)
+  conflictRows Int          @default(0)
+  errorLog     String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  uploadedBy   User         @relation("UploadedBy", fields: [uploadedById], references: [id])
+  stagedEntries StagedTimetableEntry[]
+}
+
+model StagedTimetableEntry {
+  id                 String       @id @default(uuid())
+  jobId              String
+  rawRowIndex        Int
+  rawCourseCode      String?
+  rawCourseTitle     String?
+  rawVenue           String?
+  rawDay             String?
+  rawTime            String?
+  rawLecturer        String?
+  rawCohort          String?
+
+  // Normalized / Resolved relations
+  resolvedCourseId   String?
+  resolvedVenueId    String?
+  resolvedLecturerId String?
+  resolvedCohortId   String?
+  normalizedDay      DayOfWeek?
+  normalizedStartTime String?
+  normalizedEndTime   String?
+
+  validationStatus   String       @default("PENDING") // VALID, CONFLICT, UNRESOLVED
+  conflictSeverity   String?      // BLOCKING, WARNING, INFO
+  conflictMessage    String?
+
+  importJob          ImportJob    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  userId      String
+  title       String
+  message     String
+  type        NotificationType @default(GENERAL)
+  isRead      Boolean          @default(false)
+  linkUrl     String?
+  createdAt   DateTime         @default(now())
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+}
+
+model Announcement {
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  authorId  String
+  cohortId  String?
+  courseId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  author    User     @relation("AuthorAnnouncements", fields: [authorId], references: [id], onDelete: Cascade)
+  cohort    Cohort?  @relation(fields: [cohortId], references: [id], onDelete: SetNull)
+  course    Course?  @relation(fields: [courseId], references: [id], onDelete: SetNull)
+}
