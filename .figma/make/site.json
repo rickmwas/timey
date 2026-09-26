@@ -1,0 +1,10 @@
+{
+  "description": "Manage academic timetables and venues for Kisii University with real-time updates, conflict detection, and role-based access for students, lecturers, and admins.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
