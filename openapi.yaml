@@ -6,9 +6,11 @@ info:
 servers:
   - url: /api/v1
 paths:
-  /health:
+  /api/health:
     get:
       summary: Health and readiness check
+      servers:
+        - url: /
       responses:
         '200':
           description: Service operational
