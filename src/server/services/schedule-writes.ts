@@ -10,6 +10,7 @@ import { AppError } from "@/server/errors/app-error";
 import type { AuthenticatedUser } from "@/server/middleware/require-user";
 import { detectSlotConflicts, type SlotLike } from "@/server/services/conflicts";
 import { buildNotificationMessage, buildScheduleChangeMetadata, type ScheduleChangeType as ScheduleChangeLabel } from "@/server/services/schedule-ops";
+import { createNotificationBatch } from "@/server/services/notifications";
 
 type MutationAction = "reschedule" | "cancel" | "postpone";
 type MutationInput = {
@@ -368,18 +369,15 @@ export async function writeScheduleChange(
         select: { id: true },
       });
       const notificationTypeValue = notificationType(changeType);
-      const notificationResult = await transaction.notification.createMany({
-        data: recipients.map(({ id }) => ({
+      const notificationCount = await createNotificationBatch(transaction, recipients.map(({ id }) => ({
           recipientId: id,
           sourceChangeId: change.id,
           title: `${entry.offering.course.code}: ${changeType.replaceAll("_", " ").toLowerCase()}`,
           message,
           type: notificationTypeValue,
-        })),
-        skipDuplicates: true,
-      });
+        })));
 
-      return { change, override, notificationCount: notificationResult.count, replayed: false };
+      return { change, override, notificationCount, replayed: false };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   } catch (error) {
     if (error instanceof AppError) throw error;
