@@ -27,6 +27,7 @@ export const GET = apiHandler(async (request: NextRequest) => {
         building: true,
         capacity: true,
         isActive: true,
+        isUnderMaintenance: true,
       },
     }),
     db.timetableEntry.findMany({

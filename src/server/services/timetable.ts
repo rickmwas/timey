@@ -7,6 +7,7 @@ export type VenueSummary = {
   building: string;
   capacity: number;
   isActive: boolean;
+  isUnderMaintenance?: boolean;
 };
 
 export type VenueAvailabilityQuery = {
@@ -49,6 +50,7 @@ export function findAvailableVenues(
   const filteredVenues = venues.filter(
     (venue) =>
       venue.isActive &&
+      !venue.isUnderMaintenance &&
       venue.capacity >= minCapacity &&
       (!buildingFilter || venue.building === buildingFilter),
   );

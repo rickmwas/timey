@@ -173,6 +173,7 @@ model Venue {
   floor     Int      @default(1)
   capacity  Int      @default(100)
   isActive  Boolean  @default(true)
+  isUnderMaintenance Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

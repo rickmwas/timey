@@ -20,7 +20,7 @@ describe("timetable domain", () => {
       [
         { id: "v-1", code: "LH 26", name: "Lecture Hall 26", building: "Main Academic Complex", capacity: 120, isActive: true },
         { id: "v-2", code: "LH 28", name: "Lecture Hall 28", building: "Main Academic Complex", capacity: 80, isActive: true },
-        { id: "v-3", code: "CS LAB 1", name: "Computer Lab 1", building: "Science Block", capacity: 60, isActive: true },
+        { id: "v-3", code: "CS LAB 1", name: "Computer Lab 1", building: "Main Academic Complex", capacity: 60, isActive: true, isUnderMaintenance: true },
       ],
       [
         {
