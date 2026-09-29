@@ -4,6 +4,7 @@ import { Role } from "@prisma/client";
 import { db } from "@/lib/db";
 import { AppError } from "@/server/errors/app-error";
 import { writeScheduleChange } from "@/server/services/schedule-writes";
+import { readEffectiveTimetable } from "@/server/services/timetable-reads";
 
 afterAll(async () => {
   await db.$disconnect();
@@ -125,6 +126,39 @@ describe("schedule write concurrency", () => {
       expect(await db.notification.count({ where: { recipientId: ids.student } })).toBe(1);
       expect((await db.timetableEntry.findUniqueOrThrow({ where: { id: ids.entry } })).version).toBe(2);
 
+      const studentActor = {
+        id: ids.student,
+        email: `student-${suffix}@test.invalid`,
+        institutionalId: `S-${suffix}`,
+        fullName: "Test Student",
+        role: Role.STUDENT,
+        cohortId: ids.cohort,
+        departmentId: ids.department,
+        mustChangePassword: false,
+        sessionId: randomUUID(),
+      };
+      const readQuery = {
+        startDate: "2026-10-01",
+        endDate: "2026-10-31",
+        periodId: ids.period,
+        cursor: undefined,
+        limit: 25,
+      };
+      const rescheduledSchedule = await readEffectiveTimetable(studentActor, readQuery);
+      expect(rescheduledSchedule.items).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          entryId: ids.entry,
+          occurrenceDate: "2026-10-05",
+          effectiveDate: "2026-10-12",
+          status: "RESCHEDULED",
+        }),
+      ]));
+      const otherCohortSchedule = await readEffectiveTimetable(
+        { ...studentActor, cohortId: randomUUID() },
+        readQuery,
+      );
+      expect(otherCohortSchedule.items).toHaveLength(0);
+
       const successfulIndex = results.findIndex((result) => result.status === "fulfilled");
       const replay = await writeScheduleChange(
         "reschedule",
@@ -164,6 +198,17 @@ describe("schedule write concurrency", () => {
       );
       expect(postponement.change.changeType).toBe("POSTPONEMENT");
       expect(postponement.override?.type).toBe("POSTPONED");
+      const postponedSchedule = await readEffectiveTimetable(studentActor, readQuery);
+      expect(postponedSchedule.items).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          entryId: ids.entry,
+          occurrenceDate: "2026-10-05",
+          effectiveDate: "2026-10-26",
+          status: "POSTPONED",
+          startTime: null,
+          venue: null,
+        }),
+      ]));
       expect(await db.scheduleChange.count({ where: { entryId: ids.entry } })).toBe(3);
       expect(await db.notification.count({ where: { recipientId: ids.student } })).toBe(3);
       expect((await db.timetableEntry.findUniqueOrThrow({ where: { id: ids.entry } })).version).toBe(4);
