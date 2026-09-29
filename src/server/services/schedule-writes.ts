@@ -156,9 +156,11 @@ function scheduleChangeType(
   action: MutationAction,
   previous: { day: string; startTime: string; endTime: string; venueId: string; lecturerId: string },
   next: { day: string; startTime: string; endTime: string; venueId: string; lecturerId: string },
+  dateChanged: boolean,
 ): ScheduleChangeLabel {
   if (action === "cancel") return "CANCELLATION";
   if (action === "postpone") return "POSTPONEMENT";
+  if (dateChanged) return "TIME_RESCHEDULE";
   return buildScheduleChangeMetadata({ id: "", offeringId: "", cohortId: "", ...previous }, { id: "", offeringId: "", cohortId: "", ...next }, "").changeType === "VENUE_SWAP"
     ? "VENUE_SWAP"
     : "TIME_RESCHEDULE";
@@ -226,13 +228,13 @@ export async function writeScheduleChange(
         where: { actorId_idempotencyKey: { actorId: actor.id, idempotencyKey } },
         include: { override: true },
       });
-      const expectedChangeType = action === "cancel"
-        ? "CANCELLATION"
+      const expectedChangeTypes: readonly ScheduleChangeLabel[] = action === "cancel"
+        ? ["CANCELLATION"]
         : action === "postpone"
-          ? "POSTPONEMENT"
-          : null;
+          ? ["POSTPONEMENT"]
+          : ["VENUE_SWAP", "TIME_RESCHEDULE"];
       if (existingChange) {
-        if (existingChange.entryId !== entryId || (expectedChangeType && existingChange.changeType !== expectedChangeType)) {
+        if (existingChange.entryId !== entryId || !expectedChangeTypes.includes(existingChange.changeType as ScheduleChangeLabel)) {
           throw new AppError("IDEMPOTENCY_KEY_REUSED", "This Idempotency-Key was already used for a different operation", 409);
         }
         return { change: existingChange, override: existingChange.override, notificationCount: 0, replayed: true };
@@ -249,6 +251,9 @@ export async function writeScheduleChange(
         : action === "postpone"
           ? asDate(input.replacementDate!)
           : asDate(input.replacementDate ?? input.occurrenceDate);
+      if (replacementDateValue && (replacementDateValue < entry.period.startDate || replacementDateValue > entry.period.endDate)) {
+        throw new AppError("INVALID_REPLACEMENT_DATE", "Replacement date is outside the academic period", 400);
+      }
       const replacementDay = replacementDateValue ? dayForDate(replacementDateValue) : null;
       const hasCompleteReplacementTime = Boolean(input.startTime && input.endTime);
       const nextStartTime = action === "cancel" ? null : action === "postpone" && !hasCompleteReplacementTime ? null : input.startTime ?? entry.startTime;
@@ -336,7 +341,12 @@ export async function writeScheduleChange(
         venueId: next.venueId ?? "TBD",
         lecturerId: next.lecturerId,
       };
-      const changeType = scheduleChangeType(action, previousMessageShape, nextMessageShape);
+      const changeType = scheduleChangeType(
+        action,
+        previousMessageShape,
+        nextMessageShape,
+        dateLabel(previous.date) !== dateLabel(next.date),
+      );
       const message = action === "cancel"
         ? `${entry.offering.course.code} on ${dateLabel(occurrenceDate)} is cancelled. ${input.reason}`
         : action === "postpone"

@@ -115,6 +115,8 @@ describe("schedule write concurrency", () => {
       ]);
 
       expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      const successful = results.find((result) => result.status === "fulfilled");
+      expect(successful?.status === "fulfilled" && successful.value.change.changeType).toBe("TIME_RESCHEDULE");
       const rejected = results.find((result) => result.status === "rejected");
       expect(rejected?.status).toBe("rejected");
       if (rejected?.status === "rejected") {
@@ -169,6 +171,13 @@ describe("schedule write concurrency", () => {
       );
       expect(replay.replayed).toBe(true);
       expect(await db.scheduleChange.count({ where: { entryId: ids.entry } })).toBe(1);
+      await expect(writeScheduleChange(
+        "cancel",
+        ids.entry,
+        actor,
+        { occurrenceDate: "2026-10-05", expectedVersion: 2, reason: "Wrong replay" },
+        idempotencyKeys[successfulIndex],
+      )).rejects.toMatchObject({ code: "IDEMPOTENCY_KEY_REUSED", statusCode: 409 });
 
       const unauthorizedActor = { ...actor, id: randomUUID() };
       await expect(writeScheduleChange(
