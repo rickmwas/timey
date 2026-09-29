@@ -8,6 +8,7 @@ describe("role permissions", () => {
   it("grants administrators all officer permissions", () => {
     expect(hasPermission(Role.ADMIN, "import:manage")).toBe(true);
     expect(hasPermission(Role.ADMIN, "venue:manage")).toBe(true);
+    expect(hasPermission(Role.TIMETABLE_OFFICER, "announcement:publish")).toBe(true);
     expect(hasPermission(Role.TIMETABLE_OFFICER, "user:manage")).toBe(false);
     expect(hasPermission(Role.STUDENT, "timetable:write")).toBe(false);
   });

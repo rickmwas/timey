@@ -12,7 +12,7 @@ export type Permission =
 const permissions: Record<Role, readonly Permission[]> = {
   STUDENT: ["timetable:read"],
   LECTURER: ["timetable:read", "announcement:publish"],
-  TIMETABLE_OFFICER: ["timetable:read", "timetable:write", "import:manage", "venue:manage"],
+  TIMETABLE_OFFICER: ["timetable:read", "timetable:write", "import:manage", "venue:manage", "announcement:publish"],
   ADMIN: [
     "timetable:read",
     "timetable:write",

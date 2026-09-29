@@ -57,9 +57,10 @@ enum ScheduleOverrideType {
 }
 
 enum ScheduleChangeType {
-  CANCELLED
-  POSTPONED
-  RESCHEDULED
+  VENUE_SWAP
+  TIME_RESCHEDULE
+  POSTPONEMENT
+  CANCELLATION
   ENTRY_CREATED
   ENTRY_UPDATED
   ENTRY_ARCHIVED
@@ -172,6 +173,7 @@ model Venue {
   floor     Int      @default(1)
   capacity  Int      @default(100)
   isActive  Boolean  @default(true)
+  isUnderMaintenance Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
