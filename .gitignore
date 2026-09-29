@@ -35,6 +35,7 @@ Thumbs.db
 *.swo
 
 # Database & local storage
+.postgres-data/
 *.sqlite
 *.sqlite3
 *.db
