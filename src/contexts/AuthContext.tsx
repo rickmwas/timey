@@ -11,9 +11,14 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function getSessionStorage(): Storage | null {
+  if (typeof window === "undefined") return null;
+  return window.sessionStorage;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => {
-    const stored = sessionStorage.getItem('timy_user');
+    const stored = getSessionStorage()?.getItem('timy_user');
     return stored ? JSON.parse(stored) : null;
   });
 
@@ -35,14 +40,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       name: dbUser.name,
       email: dbUser.email,
       role: dbUser.role as Role,
+      cohortId: dbUser.cohortId,
     };
-    sessionStorage.setItem('timy_user', JSON.stringify(authUser));
+    getSessionStorage()?.setItem('timy_user', JSON.stringify(authUser));
     setUser(authUser);
     return { success: true };
   }, []);
 
   const logout = useCallback(() => {
-    sessionStorage.removeItem('timy_user');
+    getSessionStorage()?.removeItem('timy_user');
     setUser(null);
   }, []);
 

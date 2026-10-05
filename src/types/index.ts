@@ -77,6 +77,7 @@ export interface User {
   role: Role;
   departmentId?: string;
   department?: Department;
+  cohortId?: string;
   active: boolean;
   createdAt: string;
 }
@@ -158,4 +159,5 @@ export interface AuthUser {
   name: string;
   email: string;
   role: Role;
+  cohortId?: string;
 }

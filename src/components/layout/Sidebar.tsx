@@ -1,4 +1,7 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+"use client";
+
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Calendar, BookOpen, MapPin, Bell, Megaphone,
   Users, Upload, AlertTriangle, RefreshCw, Building2, GraduationCap,
@@ -76,12 +79,13 @@ interface SidebarProps {
 
 function SidebarContent({ onClose }: { onClose?: () => void }) {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
+  const pathname = usePathname();
   const navItems = user ? navByRole[user.role] : [];
 
   function handleLogout() {
     logout();
-    navigate('/');
+    router.push('/');
   }
 
   return (
@@ -124,37 +128,50 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
 
       {/* Navigation */}
       <nav className="flex-1 sidebar-scroll px-3 py-3 space-y-0.5">
-        {navItems.map(item => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            onClick={onClose}
-            className={({ isActive }) =>
-              cn(
+        {navItems.map(item => {
+          const isActive =
+            pathname === item.to || pathname.startsWith(item.to + '/');
+
+          return (
+            <Link
+              key={item.to}
+              href={item.to}
+              onClick={onClose}
+              className={cn(
                 'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors duration-100 group',
                 isActive
                   ? 'bg-white/15 text-white font-medium'
                   : 'text-blue-200 hover:bg-white/10 hover:text-white',
-              )
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <span className={cn('flex-shrink-0', isActive ? 'text-white' : 'text-blue-300 group-hover:text-white')}>
-                  {item.icon}
+              )}
+            >
+              <span
+                className={cn(
+                  'flex-shrink-0',
+                  isActive
+                    ? 'text-white'
+                    : 'text-blue-300 group-hover:text-white',
+                )}
+              >
+                {item.icon}
+              </span>
+
+              <span className="flex-1 min-w-0 truncate">
+                {item.label}
+              </span>
+
+              {item.badge ? (
+                <span className="ml-auto flex-shrink-0 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                  {item.badge}
                 </span>
-                <span className="flex-1 min-w-0 truncate">{item.label}</span>
-                {item.badge ? (
-                  <span className="ml-auto flex-shrink-0 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
-                    {item.badge}
-                  </span>
-                ) : isActive ? (
-                  <ChevronRight size={14} className="ml-auto flex-shrink-0 text-blue-300" />
-                ) : null}
-              </>
-            )}
-          </NavLink>
-        ))}
+              ) : isActive ? (
+                <ChevronRight
+                  size={14}
+                  className="ml-auto flex-shrink-0 text-blue-300"
+                />
+              ) : null}
+            </Link>
+          );
+        })}
       </nav>
 
       {/* Logout */}

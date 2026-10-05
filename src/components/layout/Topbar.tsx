@@ -1,6 +1,8 @@
+"use client";
+
 import { useState } from 'react';
 import { Bell, Search, ChevronDown, LogOut, User } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from "next/navigation";
 import { SidebarToggle } from './Sidebar';
 import { useAuth } from '../../contexts/AuthContext';
 import { NOTIFICATIONS } from '../../data/mock';
@@ -14,7 +16,7 @@ interface TopbarProps {
 
 export function Topbar({ onMenuClick, title, breadcrumb }: TopbarProps) {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -23,7 +25,7 @@ export function Topbar({ onMenuClick, title, breadcrumb }: TopbarProps) {
 
   function handleLogout() {
     logout();
-    navigate('/');
+    router.push('/');
   }
 
   return (
@@ -93,7 +95,7 @@ export function Topbar({ onMenuClick, title, breadcrumb }: TopbarProps) {
               )}
             </div>
             <div className="px-4 py-2 border-t border-slate-100 text-center">
-              <button onClick={() => { navigate('/notifications'); setShowNotifications(false); }} className="text-xs text-[#3b6fd4] hover:underline font-medium">
+              <button onClick={() => { router.push('/notifications'); setShowNotifications(false); }} className="text-xs text-[#3b6fd4] hover:underline font-medium">
                 View all notifications
               </button>
             </div>

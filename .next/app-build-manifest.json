@@ -1,26 +1,45 @@
 {
   "pages": {
-    "/_not-found/page": [
-      "static/chunks/webpack-a55da7ef47bb7c15.js",
-      "static/chunks/fd9d1056-749e5812300142af.js",
-      "static/chunks/117-e5476d4bdcce692a.js",
-      "static/chunks/main-app-961becffb4ecba32.js",
-      "static/chunks/app/_not-found/page-eaa53ae320539b27.js"
+    "/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/page.js"
     ],
     "/layout": [
-      "static/chunks/webpack-a55da7ef47bb7c15.js",
-      "static/chunks/fd9d1056-749e5812300142af.js",
-      "static/chunks/117-e5476d4bdcce692a.js",
-      "static/chunks/main-app-961becffb4ecba32.js",
-      "static/css/87310bb725b71809.css",
-      "static/chunks/app/layout-c58d072bfdbc7aa9.js"
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/css/app/layout.css",
+      "static/chunks/app/layout.js"
     ],
-    "/page": [
-      "static/chunks/webpack-a55da7ef47bb7c15.js",
-      "static/chunks/fd9d1056-749e5812300142af.js",
-      "static/chunks/117-e5476d4bdcce692a.js",
-      "static/chunks/main-app-961becffb4ecba32.js",
-      "static/chunks/app/page-0a8b9a7b052e6eac.js"
+    "/dashboard/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/dashboard/page.js"
+    ],
+    "/timetable/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/timetable/page.js"
+    ],
+    "/courses/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/courses/page.js"
+    ],
+    "/venues/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/venues/page.js"
+    ],
+    "/announcements/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/announcements/page.js"
+    ],
+    "/notifications/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/notifications/page.js"
     ]
   }
 }

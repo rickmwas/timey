@@ -56,9 +56,9 @@ const lecturers: User[] = [
 ];
 
 const students: User[] = [
-  { id: 's1', identifier: 'IN16/00015/24', name: 'Alice Mwangi', email: 'a.mwangi@students.kisii.ac.ke', role: 'STUDENT', departmentId: 'd1', department: DEPARTMENTS[0], active: true, createdAt: '2024-09-01' },
-  { id: 's2', identifier: 'IN16/00032/24', name: 'Brian Otieno', email: 'b.otieno@students.kisii.ac.ke', role: 'STUDENT', departmentId: 'd1', department: DEPARTMENTS[0], active: true, createdAt: '2024-09-01' },
-  { id: 's3', identifier: 'IN16/00088/23', name: 'Catherine Njoroge', email: 'c.njoroge@students.kisii.ac.ke', role: 'STUDENT', departmentId: 'd1', department: DEPARTMENTS[0], active: true, createdAt: '2023-09-01' },
+  { id: 's1', identifier: 'IN16/00015/24', name: 'Alice Mwangi', email: 'a.mwangi@students.kisii.ac.ke', role: 'STUDENT', departmentId: 'd1', department: DEPARTMENTS[0], cohortId: 'c1', active: true, createdAt: '2024-09-01' },
+  { id: 's2', identifier: 'IN16/00032/24', name: 'Brian Otieno', email: 'b.otieno@students.kisii.ac.ke', role: 'STUDENT', departmentId: 'd1', department: DEPARTMENTS[0], cohortId: 'c2', active: true, createdAt: '2024-09-01' },
+  { id: 's3', identifier: 'IN16/00088/23', name: 'Catherine Njoroge', email: 'c.njoroge@students.kisii.ac.ke', role: 'STUDENT', departmentId: 'd1', department: DEPARTMENTS[0], cohortId: 'c1', active: true, createdAt: '2023-09-01' },
 ];
 
 const officers: User[] = [
