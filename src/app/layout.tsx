@@ -1,18 +1,6 @@
+import Providers from "./providers";
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
-import "./globals.css";
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-jetbrains-mono",
-  display: "swap",
-});
+ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Timy — Academic Timetable & Venue Management | Kisii University",
@@ -24,8 +12,8 @@ export const metadata: Metadata = {
     "Lecture Hall",
     "LH 26",
     "Computing Sciences",
-    "Academic Schedule",
-  ],
+    "Academic Schedule"
+  ]
 };
 
 export default function RootLayout({
@@ -34,9 +22,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en">
       <body className="min-h-screen bg-background font-sans antialiased text-foreground">
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

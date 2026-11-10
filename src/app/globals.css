@@ -1,77 +1,100 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap');
+@import 'tailwindcss';
 
-@layer base {
-  :root {
-    --background: 210 40% 98%;       /* #F8FAFC */
-    --foreground: 222 47% 11%;       /* #0F172A */
+@theme {
+  --color-navy-950: #0d1b3e;
+  --color-navy-900: #1a2f5c;
+  --color-navy-800: #1e3a6e;
+  --color-navy-700: #234080;
+  --color-navy-600: #2a4fa0;
+  --color-navy-500: #3b6fd4;
+  --color-navy-400: #6b9de8;
+  --color-navy-300: #9bbdf0;
+  --color-navy-200: #ccdaf8;
+  --color-navy-100: #e8f0fd;
+  --color-navy-50: #f4f7fe;
 
-    --card: 0 0% 100%;               /* #FFFFFF */
-    --card-foreground: 222 47% 11%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-
-    --primary: 210 63% 16%;          /* Kisii Navy #0F2942 */
-    --primary-foreground: 210 40% 98%;
-
-    --secondary: 224 64% 33%;        /* Academic Slate #1E3A8A */
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215 16% 47%; /* #64748B */
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222 47% 11%;
-
-    --destructive: 0 72% 51%;        /* Urgent Alert #DC2626 */
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214 32% 91%;          /* #E2E8F0 */
-    --input: 214 32% 91%;
-    --ring: 210 63% 16%;
-
-    --radius: 0.5rem;
-  }
-
-  .dark {
-    --background: 222 47% 7%;
-    --foreground: 210 40% 98%;
-
-    --card: 222 47% 11%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222 47% 11%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 210 63% 16%;
-
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
-
-    --accent: 217 33% 17%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217 33% 20%;
-    --input: 217 33% 20%;
-    --ring: 212 95% 68%;
-  }
+  --font-family-display: 'DM Serif Display', Georgia, serif;
+  --font-family-body: 'Inter', system-ui, sans-serif;
 }
 
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
-  }
+:root {
+  --background: #f1f5f9;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --primary: #1a2f5c;
+  --primary-foreground: #ffffff;
+  --secondary: #e8f0fd;
+  --secondary-foreground: #1a2f5c;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #3b6fd4;
+  --accent-foreground: #ffffff;
+  --border: #e2e8f0;
+  --ring: #3b6fd4;
+  --radius: 0.5rem;
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
 }
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-display {
+  font-family: 'DM Serif Display', Georgia, serif;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Sidebar scroll */
+.sidebar-scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+/* Timetable grid */
+.timetable-card {
+  transition: all 0.15s ease;
+}
+.timetable-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Badge variants */
+.status-active { background: #dcfce7; color: #15803d; }
+.status-cancelled { background: #fee2e2; color: #991b1b; }
+.status-rescheduled { background: #fef9c3; color: #92400e; }
+.status-moved { background: #dbeafe; color: #1e40af; }
