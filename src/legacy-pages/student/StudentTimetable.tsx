@@ -1,27 +1,28 @@
 "use client";
 
 import { useState } from 'react';
-import { Search, Filter } from 'lucide-react';
+import { Search, Filter, WifiOff } from 'lucide-react';
 import { Layout } from '../../components/layout/Layout';
 import { Card } from '../../components/ui/Card';
 import { TimetableCard } from '../../components/timetable/TimetableCard';
 import { TimetableStatusBadge } from '../../components/ui/StatusBadge';
-import { TIMETABLE_ENTRIES, COHORTS } from '../../data/mock';
 import { useAuth } from '../../contexts/AuthContext';
-import { DAY_ORDER, DAY_LABELS, formatTime } from '../../lib/utils';
+import { useTimetable } from '../../hooks/use-timetable';
+import { COHORTS } from '../../data/mock';
+import { DAY_ORDER, DAY_LABELS, formatTime, timeAgo } from '../../lib/utils';
 import type { Day } from '../../types';
 
 type ViewMode = 'week' | 'list' | 'day';
 
 export function StudentTimetable() {
   const { user } = useAuth();
+  const { entries, isLoading, isOffline, lastSyncedAt } = useTimetable();
   const [view, setView] = useState<ViewMode>('week');
   const [selectedDay, setSelectedDay] = useState<Day>('MONDAY');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
 
   const cohort = COHORTS.find(c => c.id === user?.cohortId) ?? COHORTS[0];
-  const entries = TIMETABLE_ENTRIES.filter(e => e.cohortId === cohort.id);
 
   const filtered = entries.filter(e => {
     const matchSearch = !search ||
@@ -37,6 +38,18 @@ export function StudentTimetable() {
 
   return (
     <Layout breadcrumb={[{ label: 'Dashboard', to: '/dashboard' }, { label: 'My Timetable' }]}>
+      {/* Ambient Offline Banner */}
+      {isOffline && (
+        <div className="bg-amber-50 text-amber-900 text-xs px-3.5 py-2.5 rounded-xl flex items-center gap-2 border border-amber-200 mb-5 shadow-sm">
+          <WifiOff size={15} className="text-amber-600 flex-shrink-0" />
+          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse flex-shrink-0" />
+          <span>
+            Offline mode active. Displaying cached timetable{' '}
+            {lastSyncedAt ? `(synced ${timeAgo(lastSyncedAt.toISOString())})` : ''} · Read-only access enabled.
+          </span>
+        </div>
+      )}
+
       <div className="mb-5 flex flex-col sm:flex-row sm:items-center gap-3">
         <div>
           <h1 className="font-display text-2xl text-slate-900">My Timetable</h1>

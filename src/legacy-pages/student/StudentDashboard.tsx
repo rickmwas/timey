@@ -1,49 +1,49 @@
 "use client";
 
-import { Clock, BookOpen, MapPin, AlertTriangle, Megaphone } from 'lucide-react';
+import { Clock, BookOpen, MapPin, AlertTriangle, Megaphone, WifiOff } from 'lucide-react';
 import { Layout } from '../../components/layout/Layout';
 import { Card, StatCard } from '../../components/ui/Card';
 import { TimetableCard } from '../../components/timetable/TimetableCard';
 import { useAuth } from '../../contexts/AuthContext';
-import { TIMETABLE_ENTRIES, NOTIFICATIONS, ANNOUNCEMENTS, COHORTS } from '../../data/mock';
+import { useTimetable } from '../../hooks/use-timetable';
+import { useNotifications } from '../../hooks/use-notifications';
+import { ANNOUNCEMENTS, COHORTS } from '../../data/mock';
 import { getTodayDay, formatTime, DAY_LABELS, timeAgo } from '../../lib/utils';
 
 export function StudentDashboard() {
   const { user } = useAuth();
+  const { entries, todayEntries, nextClass, isLoading, isOffline, lastSyncedAt } = useTimetable();
+  const { notifications, unreadCount } = useNotifications();
   const todayDay = getTodayDay();
 
   const studentCohort = COHORTS.find(c => c.id === user?.cohortId) ?? COHORTS[0];
-  const cohortEntries = TIMETABLE_ENTRIES.filter(e => e.cohortId === studentCohort.id);
-
-  const todayEntries = cohortEntries.filter(e => {
-    const effectiveDay = e.status === 'RESCHEDULED' && e.rescheduledDay ? e.rescheduledDay : e.day;
-    return effectiveDay === todayDay && e.status !== 'CANCELLED';
-  }).sort((a, b) => a.startTime.localeCompare(b.startTime));
-
-  const upcomingEntries = cohortEntries
-    .filter(e => e.status === 'ACTIVE')
-    .slice(0, 3);
-
-  const userNotifications = NOTIFICATIONS.filter(n => n.userId === user?.id && !n.read);
   const recentAnnouncements = ANNOUNCEMENTS.slice(0, 3);
 
   const now = new Date();
   const currentHour = now.getHours();
-  const currentMin = now.getMinutes();
-  const nowMins = currentHour * 60 + currentMin;
 
-  const nextClass = todayEntries.find(e => {
-    const [h, m] = e.startTime.split(':').map(Number);
-    return h * 60 + m > nowMins;
-  });
+  const uniqueCoursesCount = new Set(entries.map(e => e.courseId || e.course.code)).size;
+  const cancelledCount = entries.filter(e => e.status === 'CANCELLED').length;
 
   return (
     <Layout breadcrumb={[{ label: 'Dashboard' }]}>
+      {/* Ambient Offline Banner */}
+      {isOffline && (
+        <div className="bg-amber-50 text-amber-900 text-xs px-3.5 py-2.5 rounded-xl flex items-center gap-2 border border-amber-200 mb-5 shadow-sm">
+          <WifiOff size={15} className="text-amber-600 flex-shrink-0" />
+          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse flex-shrink-0" />
+          <span>
+            Working offline. Displaying cached timetable{' '}
+            {lastSyncedAt ? `(synced ${timeAgo(lastSyncedAt.toISOString())})` : ''} · Campus updates will sync automatically once reconnected.
+          </span>
+        </div>
+      )}
+
       {/* Welcome bar */}
       <div className="mb-6">
         <h1 className="font-display text-2xl text-slate-900">
           Good {currentHour < 12 ? 'morning' : currentHour < 17 ? 'afternoon' : 'evening'},{' '}
-          <span className="text-[#1a2f5c]">{user?.name.split(' ')[0]}</span>
+          <span className="text-[#1a2f5c]">{user?.name ? user.name.split(' ')[0] : 'Student'}</span>
         </h1>
         <p className="text-slate-500 text-sm mt-0.5">
           {studentCohort.name} · {studentCohort.academicYear} Semester {studentCohort.semester} ·{' '}
@@ -62,21 +62,21 @@ export function StudentDashboard() {
         />
         <StatCard
           label="My Courses"
-          value={new Set(cohortEntries.map(e => e.courseId)).size}
+          value={uniqueCoursesCount}
           icon={<BookOpen size={18} className="text-violet-600" />}
           iconBg="bg-violet-100"
-          subtitle="This semester"
+          subtitle="Enrolled semester"
         />
         <StatCard
           label="Unread Alerts"
-          value={userNotifications.length}
+          value={unreadCount}
           icon={<AlertTriangle size={18} className="text-amber-600" />}
           iconBg="bg-amber-100"
-          subtitle={userNotifications.length > 0 ? 'Requires attention' : 'All caught up'}
+          subtitle={unreadCount > 0 ? 'Requires attention' : 'All caught up'}
         />
         <StatCard
           label="Cancelled"
-          value={cohortEntries.filter(e => e.status === 'CANCELLED').length}
+          value={cancelledCount}
           icon={<MapPin size={18} className="text-red-500" />}
           iconBg="bg-red-100"
           subtitle="This semester"
@@ -111,9 +111,13 @@ export function StudentDashboard() {
           <div>
             <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
               <Clock size={15} />
-              Today's Schedule — {DAY_LABELS[todayDay]}
+              Today&apos;s Schedule — {DAY_LABELS[todayDay]}
             </h2>
-            {todayEntries.length === 0 ? (
+            {isLoading && entries.length === 0 ? (
+              <Card className="text-center py-10">
+                <p className="text-slate-400 text-sm animate-pulse">Loading today&apos;s schedule...</p>
+              </Card>
+            ) : todayEntries.length === 0 ? (
               <Card className="text-center py-10">
                 <p className="text-slate-400 text-sm">No classes scheduled for today.</p>
               </Card>
@@ -130,14 +134,14 @@ export function StudentDashboard() {
         {/* Right column */}
         <div className="space-y-4">
           {/* Notifications */}
-          {userNotifications.length > 0 && (
+          {notifications.length > 0 && (
             <Card>
               <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
                 <AlertTriangle size={15} className="text-amber-500" />
                 Schedule Alerts
               </h2>
               <div className="space-y-3">
-                {userNotifications.map(n => (
+                {notifications.slice(0, 4).map(n => (
                   <div key={n.id} className="text-sm">
                     <p className="font-medium text-slate-800">{n.title}</p>
                     <p className="text-slate-500 text-xs mt-0.5 line-clamp-2">{n.message}</p>
@@ -169,7 +173,7 @@ export function StudentDashboard() {
             <h2 className="text-sm font-semibold text-slate-700 mb-3">This Week</h2>
             <div className="space-y-2">
               {(['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'] as const).map(day => {
-                const dayEntries = cohortEntries.filter(e => e.day === day);
+                const dayEntries = entries.filter(e => e.day === day && e.status !== 'CANCELLED');
                 return (
                   <div key={day} className={`flex items-center justify-between py-1.5 px-2 rounded-lg text-sm ${day === todayDay ? 'bg-blue-50' : ''}`}>
                     <span className={`font-medium ${day === todayDay ? 'text-[#1a2f5c]' : 'text-slate-600'}`}>

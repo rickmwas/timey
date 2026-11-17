@@ -5,7 +5,7 @@ import { Bell, Search, ChevronDown, LogOut, User } from 'lucide-react';
 import { useRouter } from "next/navigation";
 import { SidebarToggle } from './Sidebar';
 import { useAuth } from '../../contexts/AuthContext';
-import { NOTIFICATIONS } from '../../data/mock';
+import { useNotifications } from '../../hooks/use-notifications';
 import { timeAgo } from '../../lib/utils';
 
 interface TopbarProps {
@@ -16,12 +16,10 @@ interface TopbarProps {
 
 export function Topbar({ onMenuClick, title, breadcrumb }: TopbarProps) {
   const { user, logout } = useAuth();
+  const { notifications, unreadCount, markAsRead } = useNotifications();
   const router = useRouter();
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-
-  const userNotifications = NOTIFICATIONS.filter(n => n.userId === user?.id);
-  const unreadCount = userNotifications.filter(n => !n.read).length;
 
   function handleLogout() {
     logout();
@@ -77,11 +75,15 @@ export function Topbar({ onMenuClick, title, breadcrumb }: TopbarProps) {
               <span className="text-xs text-slate-500">{unreadCount} unread</span>
             </div>
             <div className="max-h-80 overflow-y-auto">
-              {userNotifications.length === 0 ? (
+              {notifications.length === 0 ? (
                 <p className="text-sm text-slate-500 text-center py-8">No notifications</p>
               ) : (
-                userNotifications.slice(0, 5).map(n => (
-                  <div key={n.id} className={`px-4 py-3 border-b border-slate-50 hover:bg-slate-50 cursor-pointer ${!n.read ? 'bg-blue-50/50' : ''}`}>
+                notifications.slice(0, 5).map(n => (
+                  <div
+                    key={n.id}
+                    onClick={() => markAsRead(n.id)}
+                    className={`px-4 py-3 border-b border-slate-50 hover:bg-slate-50 cursor-pointer ${!n.read ? 'bg-blue-50/50' : ''}`}
+                  >
                     <div className="flex items-start gap-2">
                       {!n.read && <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-1.5" />}
                       <div className={!n.read ? '' : 'ml-4'}>
