@@ -6,7 +6,7 @@ import { requirePermission } from "@/server/middleware/require-role";
 import { requireUser } from "@/server/middleware/require-user";
 import { ImportVersionSchema } from "@/server/schemas/imports";
 import { assertSameOrigin } from "@/server/security/csrf";
-import { validateImport } from "@/server/services/imports";
+import { toImportResponse, validateImport } from "@/server/services/imports";
 
 export const POST = apiHandler(async (request: NextRequest, context) => {
   assertSameOrigin(request);
@@ -15,7 +15,7 @@ export const POST = apiHandler(async (request: NextRequest, context) => {
   const id = context.params.id;
   if (!uuid(id)) throw new AppError("INVALID_ID", "Import ID must be a UUID", 400);
   const { expectedVersion } = ImportVersionSchema.parse(await request.json());
-  return successResponse({ job: await validateImport(id, expectedVersion) });
+  return successResponse({ job: toImportResponse(await validateImport(id, expectedVersion)) });
 });
 
 function uuid(value: string): boolean {

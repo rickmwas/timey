@@ -7,19 +7,76 @@ import { requirePermission } from "@/server/middleware/require-role";
 import { requireUser } from "@/server/middleware/require-user";
 import { ImportListQuerySchema } from "@/server/schemas/imports";
 import { assertSameOrigin } from "@/server/security/csrf";
-import { createImport, listImports } from "@/server/services/imports";
+import { fileStorage, isVercelDeployment } from "@/server/storage/file-storage-provider";
+import { z } from "zod";
+import { createImport, listImports, toImportResponse } from "@/server/services/imports";
+
+const StoredUploadSchema = z.object({
+  periodId: z.string().uuid(),
+  fileName: z.string().min(1).max(255),
+  mimeType: z.string().max(255),
+  storageKey: z.string().min(1),
+});
 
 export const GET = apiHandler(async (request: NextRequest) => {
   const actor = await requireUser(request);
   requirePermission(actor, "import:manage");
   const query = ImportListQuerySchema.parse(Object.fromEntries(request.nextUrl.searchParams.entries()));
-  return successResponse(await listImports(query));
+  const page = await listImports(query);
+  return successResponse({ ...page, items: page.items.map(toImportResponse) });
 });
 
 export const POST = apiHandler(async (request: NextRequest) => {
   assertSameOrigin(request);
   const actor = await requireUser(request);
   requirePermission(actor, "import:manage");
+
+  if (request.headers.get("content-type")?.includes("application/json")) {
+    if (!isVercelDeployment()) {
+      throw new AppError("INVALID_UPLOAD_METHOD", "Direct uploads are only available on Vercel", 400);
+    }
+    const parsed = StoredUploadSchema.safeParse(await request.json());
+    if (!parsed.success) throw new AppError("INVALID_IMPORT_UPLOAD", "A valid uploaded file is required", 400);
+    const { periodId, fileName, mimeType, storageKey } = parsed.data;
+    const stagingPrefix = `imports/${actor.id}/staging/`;
+    const extension = fileName.toLowerCase().split(".").at(-1);
+    const stagingName = storageKey.startsWith(stagingPrefix)
+      ? storageKey.slice(stagingPrefix.length)
+      : "";
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(csv|xlsx)$/i.test(stagingName) ||
+      !["csv", "xlsx"].includes(extension ?? "") ||
+      !stagingName.toLowerCase().endsWith(`.${extension}`)
+    ) {
+      throw new AppError("INVALID_STORAGE_KEY", "The uploaded file is not valid for this account", 400);
+    }
+    const allowedContentTypes = extension === "xlsx"
+      ? ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]
+      : ["text/csv", "application/csv", "text/plain", "application/octet-stream"];
+    if (mimeType && !allowedContentTypes.includes(mimeType)) {
+      throw new AppError("IMPORT_FILE_INVALID", "File content type does not match its extension", 400);
+    }
+
+    const contents = await fileStorage.get(storageKey);
+    let job: Awaited<ReturnType<typeof createImport>>;
+    try {
+      job = await createImport(actor, { periodId, fileName, mimeType, contents });
+    } catch (error) {
+      try {
+        await fileStorage.delete(storageKey);
+      } catch (cleanupError) {
+        console.error("Failed to remove a temporary timetable upload", cleanupError);
+      }
+      throw error;
+    }
+    try {
+      await fileStorage.delete(storageKey);
+    } catch (cleanupError) {
+      console.error("Failed to remove a temporary timetable upload", cleanupError);
+    }
+    return successResponse({ job: toImportResponse(job) }, 201);
+  }
+
   const form = await request.formData();
   const periodId = form.get("periodId");
   const file = form.get("file");
@@ -41,7 +98,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     mimeType: file.type,
     contents: new Uint8Array(await file.arrayBuffer()),
   });
-  return successResponse({ job }, 201);
+  return successResponse({ job: toImportResponse(job) }, 201);
 });
 
 function zodUuid(value: string): boolean {

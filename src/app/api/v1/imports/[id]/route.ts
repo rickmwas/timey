@@ -4,14 +4,15 @@ import { apiHandler } from "@/server/http/route";
 import { successResponse } from "@/server/http/responses";
 import { requirePermission } from "@/server/middleware/require-role";
 import { requireUser } from "@/server/middleware/require-user";
-import { getImport } from "@/server/services/imports";
+import { getImport, toImportResponse } from "@/server/services/imports";
 
 export const GET = apiHandler(async (_request: NextRequest, context) => {
   const actor = await requireUser(_request);
   requirePermission(actor, "import:manage");
   const id = context.params.id;
   if (!uuid(id)) throw new AppError("INVALID_ID", "Import ID must be a UUID", 400);
-  return successResponse({ job: await getImport(id) });
+  const job = await getImport(id);
+  return successResponse({ job: toImportResponse(job) });
 });
 
 function uuid(value: string): boolean {

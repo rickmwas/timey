@@ -9,6 +9,8 @@ import { ImportStatusBadge } from '../../components/ui/StatusBadge';
 import { formatFileSize, formatDateTime } from '../../lib/utils';
 import { apiRequest } from '../../lib/api-client';
 import { useApiCollection } from '../../hooks/use-api-collection';
+import { useAuth } from '../../contexts/AuthContext';
+import { upload } from '@vercel/blob/client';
 
 type Step = 'upload' | 'preview' | 'conflicts' | 'done';
 
@@ -46,6 +48,7 @@ type ImportDetail = ImportJob & { periodId: string; stagedEntries: StagedEntry[]
 type AcademicPeriod = { id: string; name: string };
 
 export function ImportTimetable() {
+  const { user } = useAuth();
   const { items: jobs, isLoading: jobsLoading, error: jobsError, refresh: refreshJobs } =
     useApiCollection<ImportJob>('/api/v1/imports');
   const [step, setStep] = useState<Step>('upload');
@@ -78,13 +81,34 @@ export function ImportTimetable() {
     setUploadedFile(file);
     setProcessing(true);
     try {
-      const form = new FormData();
-      form.append('periodId', period.id);
-      form.append('file', file);
-      const created = await apiRequest<{ job: ImportJob }>('/api/v1/imports', {
-        method: 'POST',
-        body: form,
-      });
+      const { clientUpload } = await apiRequest<{ clientUpload: boolean }>('/api/v1/imports/upload');
+      let created: { job: ImportJob };
+      if (clientUpload) {
+        if (!user) throw new Error('You must be signed in to upload a timetable.');
+        if (file.size > 10 * 1024 * 1024) throw new Error('Import files must be 10 MB or smaller.');
+        const extension = file.name.toLowerCase().split('.').at(-1);
+        if (extension !== 'csv' && extension !== 'xlsx') throw new Error('Only CSV and XLSX files are supported.');
+        const contentType = file.type || (extension === 'csv' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        const storageKey = `imports/${user.id}/staging/${crypto.randomUUID()}.${extension}`;
+        const blob = await upload(storageKey, file, {
+          access: 'private',
+          contentType,
+          handleUploadUrl: '/api/v1/imports/upload',
+          clientPayload: JSON.stringify({ periodId: period.id, fileName: file.name, mimeType: contentType }),
+        });
+        created = await apiRequest<{ job: ImportJob }>('/api/v1/imports', {
+          method: 'POST',
+          body: JSON.stringify({ periodId: period.id, fileName: file.name, mimeType: contentType, storageKey: blob.pathname }),
+        });
+      } else {
+        const form = new FormData();
+        form.append('periodId', period.id);
+        form.append('file', file);
+        created = await apiRequest<{ job: ImportJob }>('/api/v1/imports', {
+          method: 'POST',
+          body: form,
+        });
+      }
       await loadJob(created.job.id);
       setStep('preview');
       await refreshJobs();

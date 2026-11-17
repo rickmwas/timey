@@ -8,10 +8,15 @@ import type { AuthenticatedUser } from "@/server/middleware/require-user";
 import { detectSlotConflicts, type SlotLike } from "@/server/services/conflicts";
 import { MAX_IMPORT_BYTES, normalizeDay, normalizeTimeRange, parseTimetableFile, type ParsedImportRow } from "@/server/services/import-parser";
 import { createNotificationBatch } from "@/server/services/notifications";
-import { localFileStorage } from "@/server/storage/local-file-storage";
+import { fileStorage } from "@/server/storage/file-storage-provider";
 
 export type ImportListInput = { cursor?: string; limit: number; status?: ImportStatus };
 export type ImportRowCorrection = Partial<Omit<ParsedImportRow, "rawRowIndex">> & { expectedVersion: number };
+
+export function toImportResponse<T extends { storageKey: string }>(job: T) {
+  const { storageKey: _storageKey, ...publicJob } = job;
+  return publicJob;
+}
 
 function normalizeEntity(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -135,8 +140,7 @@ export async function createImport(
   if (duplicate) throw new AppError("DUPLICATE_IMPORT", "This file has already been imported for the selected academic period", 409);
 
   const extension = safeName.toLowerCase().endsWith(".xlsx") ? "xlsx" : "csv";
-  const storageKey = `${randomUUID()}.${extension}`;
-  await localFileStorage.put(storageKey, input.contents);
+  const storageKey = await fileStorage.put(`imports/${randomUUID()}.${extension}`, input.contents);
   try {
     return await db.$transaction(async (transaction) => {
       const job = await transaction.importJob.create({
@@ -167,7 +171,7 @@ export async function createImport(
       return job;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   } catch (error) {
-    await localFileStorage.delete(storageKey);
+    await fileStorage.delete(storageKey);
     throw parseError(error);
   }
 }
@@ -375,6 +379,6 @@ export async function discardImport(jobId: string, actor: AuthenticatedUser, exp
     });
     return { id: job.id, status: ImportStatus.DISCARDED, storageKey: job.storageKey };
   });
-  await localFileStorage.delete(discarded.storageKey);
+  await fileStorage.delete(discarded.storageKey);
   return { id: discarded.id, status: discarded.status };
 }
