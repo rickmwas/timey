@@ -16,6 +16,24 @@ export const ROLE_HOME: Record<UserRole, string> = {
   STUDENT: "/dashboard",
 };
 
+export const PUBLIC_ROUTES = new Set(["/", "/login", "/signup"]);
+
+export function isPublicRoute(pathname: string): boolean {
+  return PUBLIC_ROUTES.has(pathname);
+}
+
+export function getRouteRedirect(
+  role: UserRole | undefined,
+  pathname: string,
+): string | null {
+  if (isPublicRoute(pathname)) {
+    return role ? ROLE_HOME[role] : null;
+  }
+
+  if (!role) return "/login";
+  return canAccessRoute(role, pathname) ? null : ROLE_HOME[role];
+}
+
 export function canAccessRoute(role: UserRole | undefined, pathname: string): boolean {
   if (!role) return false;
   const allowedRoutes = ROLE_PERMISSIONS[role] || [];

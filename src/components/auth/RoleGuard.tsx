@@ -3,7 +3,10 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { canAccessRoute, ROLE_HOME } from "@/lib/auth/permissions";
+import {
+  getRouteRedirect,
+  isPublicRoute,
+} from "@/lib/auth/permissions";
 
 export function RoleGuard({
   children,
@@ -13,23 +16,15 @@ export function RoleGuard({
   const { user, isLoading, sessionError } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
+  const isPublic = isPublicRoute(pathname);
+  const redirect = getRouteRedirect(user?.role, pathname);
 
   useEffect(() => {
-    if (isLoading || sessionError) return;
+    if (isLoading || sessionError || !redirect) return;
+    router.replace(redirect);
+  }, [isLoading, sessionError, redirect, router]);
 
-    if (!user) {
-      if (pathname !== "/") {
-        router.replace("/");
-      }
-      return;
-    }
-
-    if (pathname === "/" || !canAccessRoute(user.role, pathname)) {
-      router.replace(ROLE_HOME[user.role]);
-    }
-  }, [user, isLoading, sessionError, pathname, router]);
-
-  if (isLoading) {
+  if (isLoading && !isPublic) {
     return (
       <main className="grid min-h-screen place-items-center" role="status">
         Restoring your session…
@@ -37,7 +32,7 @@ export function RoleGuard({
     );
   }
 
-  if (sessionError && pathname !== "/") {
+  if (sessionError && !isPublic) {
     return (
       <main className="grid min-h-screen place-items-center p-6">
         <p className="max-w-md text-center text-sm text-red-700" role="alert">
@@ -47,24 +42,14 @@ export function RoleGuard({
     );
   }
 
-  // The login page is public and must remain visible
-  // when no user session exists.
-  if (!user) {
-    if (pathname === "/") {
-      return <>{children}</>;
-    }
-
-    return (
-      <main className="grid min-h-screen place-items-center" role="status">
-        Redirecting to sign in…
-      </main>
-    );
+  if (isPublic && !user) {
+    return <>{children}</>;
   }
 
-  if (pathname === "/" || !canAccessRoute(user.role, pathname)) {
+  if (redirect) {
     return (
       <main className="grid min-h-screen place-items-center" role="status">
-        Redirecting to your dashboard…
+        {user ? "Redirecting to your dashboard…" : "Redirecting to sign in…"}
       </main>
     );
   }

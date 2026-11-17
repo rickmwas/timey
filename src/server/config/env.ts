@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { AppUrlSchema } from "./app-url";
 
 const EnvironmentSchema = z.object({
   DATABASE_URL: z.string().url().or(z.string().min(1)),
   AUTH_SECRET: z.string().min(1),
-  APP_URL: z.string().url().default("http://localhost:3000"),
+  APP_URL: AppUrlSchema,
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   STORAGE_LOCAL_DIR: z.string().min(1).default("../timy-local-storage"),
   SEED_ADMIN_EMAIL: z.string().email().optional(),
