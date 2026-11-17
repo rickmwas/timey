@@ -1,44 +1,41 @@
 "use client";
 
 import { useState } from 'react';
-import { Search, BookOpen, Plus } from 'lucide-react';
+import { Search, BookOpen } from 'lucide-react';
 import { Layout } from '../../components/layout/Layout';
 import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { useAuth } from '../../contexts/AuthContext';
-import { COURSES, DEPARTMENTS, TIMETABLE_ENTRIES } from '../../data/mock';
+import { useApiCollection } from '../../hooks/use-api-collection';
+
+type CatalogDepartment = { id: string; name: string };
+type CatalogCourse = {
+  id: string;
+  code: string;
+  title: string;
+  departmentId: string;
+  department: CatalogDepartment;
+  credits: number;
+  scheduledSlots: number;
+};
 
 export function CoursesPage() {
-  const { user } = useAuth();
-  const canManage = user?.role === 'TIMETABLE_OFFICER' || user?.role === 'ADMIN';
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState('ALL');
+  const { items: courses, isLoading, error } = useApiCollection<CatalogCourse>('/api/v1/catalog/courses');
+  const { items: departments } = useApiCollection<CatalogDepartment>('/api/v1/catalog/departments');
 
-  const filtered = COURSES.filter(c => {
+  const filtered = courses.filter(c => {
     const matchSearch = !search || c.title.toLowerCase().includes(search.toLowerCase()) || c.code.toLowerCase().includes(search.toLowerCase());
     const matchDept = deptFilter === 'ALL' || c.departmentId === deptFilter;
     return matchSearch && matchDept;
   });
-
-  function getWeeklyHours(courseId: string) {
-    const entries = TIMETABLE_ENTRIES.filter(e => e.courseId === courseId && e.status === 'ACTIVE');
-    return entries.reduce((sum, e) => {
-      const [sh, sm] = e.startTime.split(':').map(Number);
-      const [eh, em] = e.endTime.split(':').map(Number);
-      return sum + (eh * 60 + em - sh * 60 - sm) / 60;
-    }, 0);
-  }
 
   return (
     <Layout breadcrumb={[{ label: 'Courses' }]}>
       <div className="mb-5 flex flex-col sm:flex-row sm:items-center gap-3">
         <div>
           <h1 className="font-display text-2xl text-slate-900">Courses</h1>
-          <p className="text-slate-500 text-sm">{filtered.length} of {COURSES.length} courses</p>
+          <p className="text-slate-500 text-sm">{filtered.length} courses</p>
         </div>
-        {canManage && (
-          <Button className="sm:ml-auto"><Plus size={16} /> Add Course</Button>
-        )}
       </div>
 
       <div className="flex gap-3 mb-5">
@@ -48,14 +45,16 @@ export function CoursesPage() {
         </div>
         <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)} className="px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#3b6fd4]">
           <option value="ALL">All Departments</option>
-          {DEPARTMENTS.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+          {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
       </div>
 
+      {error && <p className="mb-4 text-sm text-red-700" role="alert">{error}</p>}
+      {isLoading ? (
+        <Card className="py-12 text-center"><p role="status" className="text-sm text-slate-500">Loading courses…</p></Card>
+      ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map(c => {
-          const hours = getWeeklyHours(c.id);
-          const entryCount = TIMETABLE_ENTRIES.filter(e => e.courseId === c.id).length;
           return (
             <Card key={c.id} className="hover:shadow-md transition-shadow">
               <div className="flex items-start gap-3 mb-3">
@@ -70,13 +69,13 @@ export function CoursesPage() {
               <p className="text-xs text-slate-500 mb-2">{c.department.name}</p>
               <div className="flex items-center gap-4 text-xs text-slate-600">
                 <span>{c.credits} credits</span>
-                <span>{entryCount} timetable slot{entryCount !== 1 ? 's' : ''}</span>
-                {hours > 0 && <span>{hours}h/week</span>}
+                <span>{c.scheduledSlots} timetable slot{c.scheduledSlots !== 1 ? 's' : ''}</span>
               </div>
             </Card>
           );
         })}
       </div>
+      )}
     </Layout>
   );
 }

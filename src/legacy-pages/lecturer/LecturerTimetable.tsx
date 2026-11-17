@@ -1,14 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Calendar, Clock, MapPin, Users, BookOpen } from "lucide-react";
 import { Layout } from "../../components/layout/Layout";
 import { Card } from "../../components/ui/Card";
 import { TimetableCard } from "../../components/timetable/TimetableCard";
-import { useAuth } from "../../contexts/AuthContext";
-import { TIMETABLE_ENTRIES } from "../../data/mock";
 import { DAY_LABELS, getTodayDay } from "../../lib/utils";
 import type { Day } from "../../types";
+import { useTimetableEntries } from "../../hooks/use-timetable";
 
 const weekdays: Day[] = [
   "MONDAY",
@@ -19,16 +18,9 @@ const weekdays: Day[] = [
 ];
 
 export function LecturerTimetable() {
-  const { user } = useAuth();
+  const { entries, isLoading, error } = useTimetableEntries();
   const [selectedDay, setSelectedDay] = useState<Day>(getTodayDay());
-
-  const myEntries = useMemo(
-    () =>
-      TIMETABLE_ENTRIES.filter(
-        (entry) => entry.lecturerId === user?.id
-      ).sort((a, b) => a.startTime.localeCompare(b.startTime)),
-    [user?.id]
-  );
+  const myEntries = [...entries].sort((a, b) => a.startTime.localeCompare(b.startTime));
 
   const dayEntries = myEntries.filter(
     (entry) => entry.day === selectedDay
@@ -49,6 +41,9 @@ export function LecturerTimetable() {
           Your assigned classes, venues and teaching schedule
         </p>
       </div>
+
+      {error && <Card className="mb-4 border-red-200 text-sm text-red-700" role="alert">{error}</Card>}
+      {isLoading && <Card className="mb-4 py-6 text-center"><p role="status" className="text-sm text-slate-500">Loading your timetable…</p></Card>}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div>

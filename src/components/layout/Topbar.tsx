@@ -5,8 +5,9 @@ import { Bell, Search, ChevronDown, LogOut, User } from 'lucide-react';
 import { useRouter } from "next/navigation";
 import { SidebarToggle } from './Sidebar';
 import { useAuth } from '../../contexts/AuthContext';
-import { NOTIFICATIONS } from '../../data/mock';
 import { timeAgo } from '../../lib/utils';
+import { useApiCollection } from '../../hooks/use-api-collection';
+import { toNotification, type ApiNotification } from '../../lib/notification-adapter';
 
 interface TopbarProps {
   onMenuClick: () => void;
@@ -19,13 +20,20 @@ export function Topbar({ onMenuClick, title, breadcrumb }: TopbarProps) {
   const router = useRouter();
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
 
-  const userNotifications = NOTIFICATIONS.filter(n => n.userId === user?.id);
+  const { items: apiNotifications, isLoading: notificationsLoading, error: notificationsError } =
+    useApiCollection<ApiNotification>("/api/v1/notifications");
+  const userNotifications = apiNotifications.map(toNotification);
   const unreadCount = userNotifications.filter(n => !n.read).length;
 
-  function handleLogout() {
-    logout();
-    router.push('/');
+  async function handleLogout() {
+    const result = await logout();
+    if (!result.success) {
+      setLogoutError(result.error ?? "Sign out failed");
+      return;
+    }
+    router.replace('/');
   }
 
   return (
@@ -50,11 +58,6 @@ export function Topbar({ onMenuClick, title, breadcrumb }: TopbarProps) {
         ) : null}
       </div>
 
-      {/* Academic year pill */}
-      <div className="hidden sm:flex items-center gap-1.5 text-xs bg-navy-50 text-navy-700 px-3 py-1.5 rounded-full border border-navy-200 font-medium" style={{ background: '#f4f7fe', color: '#1a2f5c', borderColor: '#ccdaf8' }}>
-        2024/2025 · Sem 1
-      </div>
-
       {/* Notifications */}
       <div className="relative">
         <button
@@ -77,7 +80,11 @@ export function Topbar({ onMenuClick, title, breadcrumb }: TopbarProps) {
               <span className="text-xs text-slate-500">{unreadCount} unread</span>
             </div>
             <div className="max-h-80 overflow-y-auto">
-              {userNotifications.length === 0 ? (
+              {notificationsLoading ? (
+                <p className="py-8 text-center text-sm text-slate-500" role="status">Loading notifications…</p>
+              ) : notificationsError ? (
+                <p className="px-4 py-6 text-center text-sm text-red-700" role="alert">{notificationsError}</p>
+              ) : userNotifications.length === 0 ? (
                 <p className="text-sm text-slate-500 text-center py-8">No notifications</p>
               ) : (
                 userNotifications.slice(0, 5).map(n => (
@@ -127,7 +134,8 @@ export function Topbar({ onMenuClick, title, breadcrumb }: TopbarProps) {
               <button onClick={() => setShowProfile(false)} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg">
                 <User size={15} /> Profile
               </button>
-              <button onClick={handleLogout} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg">
+              {logoutError && <p className="px-3 py-2 text-xs text-red-700" role="alert">{logoutError}</p>}
+              <button onClick={() => { void handleLogout(); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg">
                 <LogOut size={15} /> Sign Out
               </button>
             </div>

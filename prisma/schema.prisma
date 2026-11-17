@@ -1,10 +1,10 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-}
-
-generator client {
-  provider = "prisma-client-js"
 }
 
 enum Role {
@@ -12,6 +12,11 @@ enum Role {
   LECTURER
   TIMETABLE_OFFICER
   ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
 }
 
 enum DayOfWeek {
@@ -26,228 +31,406 @@ enum DayOfWeek {
 
 enum SlotStatus {
   ACTIVE
-  RESCHEDULED
-  CANCELLED
-  MOVED
+  ARCHIVED
 }
 
 enum ImportStatus {
-  PENDING
-  PROCESSING
+  UPLOADED
+  PARSED
   VALIDATED
-  CONFLICTS_DETECTED
-  COMMITTED
+  PUBLISHED
   DISCARDED
   FAILED
 }
 
-enum NotificationType {
+enum StagedValidationStatus {
+  PENDING
+  VALID
+  INVALID
+  CONFLICT
+}
+
+enum ScheduleOverrideType {
+  CANCELLED
+  POSTPONED
+  RESCHEDULED
+}
+
+enum ScheduleChangeType {
   VENUE_SWAP
-  CLASS_RESCHEDULED
-  CLASS_CANCELLED
+  TIME_RESCHEDULE
+  POSTPONEMENT
+  CANCELLATION
+  ENTRY_CREATED
+  ENTRY_UPDATED
+  ENTRY_ARCHIVED
+}
+
+enum NotificationType {
+  SCHEDULE_CANCELLED
+  SCHEDULE_POSTPONED
+  SCHEDULE_RESCHEDULED
   ANNOUNCEMENT
-  SYSTEM_ALERT
-  GENERAL
+}
+
+enum AnnouncementPriority {
+  NORMAL
+  URGENT
 }
 
 model Department {
-  id        String   @id @default(uuid())
-  code      String   @unique // e.g. "COMP_SCI"
-  name      String   // e.g. "Department of Computing Sciences"
-  school    String   // e.g. "School of Information Science and Technology"
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  cohorts   Cohort[]
-  courses   Course[]
-  users     User[]
-}
-
-model Cohort {
-  id           String     @id @default(uuid())
-  code         String     @unique // e.g. "IN16-Y2-S1"
-  name         String     // e.g. "BSc Software Engineering Year 2"
-  expectedSize Int        @default(50)
-  departmentId String
-  academicYear String     // e.g. "2026/2027"
-  semester     Int        @default(1)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-
-  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  students     User[]
-  slots        TimetableEntry[]
-  announcements Announcement[]
-}
-
-model Course {
-  id           String     @id @default(uuid())
-  code         String     @unique // e.g. "SOEN 311"
-  title        String     // e.g. "Advanced Software Engineering"
-  departmentId String
-  credits      Int        @default(3)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-
-  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  slots        TimetableEntry[]
-  announcements Announcement[]
-}
-
-model Venue {
-  id        String   @id @default(uuid())
-  code      String   @unique // e.g. "LH_26"
-  name      String   @unique // e.g. "LH 26"
-  building  String   // e.g. "Science & Computing Complex"
-  floor     Int      @default(1)
-  capacity  Int      @default(100)
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique
+  name      String
+  school    String
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  aliases   VenueAlias[]
-  slots     TimetableEntry[] @relation("VenueAssigned")
-  rescheduledSlots TimetableEntry[] @relation("RescheduledVenueAssigned")
+  cohorts Cohort[]
+  courses Course[]
+  users   User[]
+}
+
+model Cohort {
+  id           String   @id @default(uuid()) @db.Uuid
+  code         String   @unique
+  name         String
+  expectedSize Int      @default(50)
+  departmentId String   @db.Uuid
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  department    Department       @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  students      User[]
+  offerings     CourseOffering[]
+  announcements Announcement[]
+
+  @@index([departmentId, isActive])
+}
+
+model Course {
+  id           String   @id @default(uuid()) @db.Uuid
+  code         String   @unique
+  title        String
+  departmentId String   @db.Uuid
+  credits      Int      @default(3)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  department Department       @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  offerings  CourseOffering[]
+
+  @@index([departmentId, isActive])
+}
+
+model AcademicPeriod {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  year      String
+  semester  Int
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+  isActive  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  offerings        CourseOffering[]
+  timetableEntries TimetableEntry[]
+  imports          ImportJob[]
+
+  @@unique([year, semester])
+  @@index([isActive, startDate, endDate])
+}
+
+model CourseOffering {
+  id        String   @id @default(uuid()) @db.Uuid
+  courseId  String   @db.Uuid
+  cohortId  String   @db.Uuid
+  periodId  String   @db.Uuid
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  course           Course           @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  cohort           Cohort           @relation(fields: [cohortId], references: [id], onDelete: Restrict)
+  period           AcademicPeriod   @relation(fields: [periodId], references: [id], onDelete: Restrict)
+  timetableEntries TimetableEntry[]
+  announcements    Announcement[]
+
+  @@unique([courseId, cohortId, periodId])
+  @@index([periodId, cohortId, isActive])
+  @@index([courseId, periodId])
+}
+
+model Venue {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique
+  name      String   @unique
+  building  String
+  floor     Int      @default(1)
+  capacity  Int      @default(100)
+  isActive  Boolean  @default(true)
+  isUnderMaintenance Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  aliases          VenueAlias[]
+  timetableEntries TimetableEntry[]
+  overrides        ScheduleOverride[]
+
+  @@index([building, isActive, capacity])
 }
 
 model VenueAlias {
-  id        String   @id @default(uuid())
-  alias     String   @unique // e.g. "LH-26", "Lecture Hall 26", "LH26"
-  venueId   String
-  createdAt DateTime @default(now())
+  id              String   @id @default(uuid()) @db.Uuid
+  alias           String
+  normalizedAlias String   @unique
+  venueId         String   @db.Uuid
+  createdAt       DateTime @default(now())
 
-  venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  venue Venue @relation(fields: [venueId], references: [id], onDelete: Restrict)
+
+  @@index([venueId])
 }
 
 model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  identifier    String    @unique // Reg No e.g. "IN16/00015/24" or Staff No "STF/089"
-  fullName      String
-  passwordHash  String
-  role          Role      @default(STUDENT)
-  cohortId      String?
-  departmentId  String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                 String     @id @default(uuid()) @db.Uuid
+  email              String     @unique
+  institutionalId    String     @unique
+  fullName           String
+  passwordHash       String
+  role               Role       @default(STUDENT)
+  status             UserStatus @default(ACTIVE)
+  mustChangePassword Boolean    @default(true)
+  passwordChangedAt  DateTime?
+  cohortId           String?    @db.Uuid
+  departmentId       String?    @db.Uuid
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
 
-  cohort        Cohort?        @relation(fields: [cohortId], references: [id], onDelete: SetNull)
-  department    Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  teachingSlots TimetableEntry[] @relation("LecturerSlots")
-  notifications Notification[]
-  authoredAnnouncements Announcement[] @relation("AuthorAnnouncements")
-  uploadedJobs  ImportJob[]    @relation("UploadedBy")
+  cohort                Cohort?            @relation(fields: [cohortId], references: [id], onDelete: Restrict)
+  department            Department?        @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  teachingSlots         TimetableEntry[]   @relation("LecturerSlots")
+  sessions              AuthSession[]
+  notifications         Notification[]     @relation("NotificationRecipient")
+  authoredAnnouncements Announcement[]     @relation("AnnouncementAuthor")
+  uploadedJobs          ImportJob[]        @relation("ImportCreator")
+  createdOverrides      ScheduleOverride[] @relation("OverrideCreator")
+  scheduleChanges       ScheduleChange[]   @relation("ChangeActor")
+  auditLogs             AuditLog[]         @relation("AuditActor")
+
+  @@index([role, status])
+  @@index([cohortId, role, status])
+}
+
+model AuthSession {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @db.Uuid
+  familyId         String    @db.Uuid
+  refreshTokenHash String    @unique
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  replacedById     String?   @unique @db.Uuid
+  userAgent        String?
+  ipHash           String?
+  createdAt        DateTime  @default(now())
+
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replacedBy AuthSession? @relation("SessionRotation", fields: [replacedById], references: [id], onDelete: SetNull)
+  replaces   AuthSession? @relation("SessionRotation")
+
+  @@index([userId, revokedAt, expiresAt])
+  @@index([familyId, revokedAt])
 }
 
 model TimetableEntry {
-  id           String     @id @default(uuid())
-  courseId     String
-  lecturerId   String
-  venueId      String
-  cohortId     String
-  day          DayOfWeek
-  startTime    String     // Format: "HH:mm", e.g. "10:00"
-  endTime      String     // Format: "HH:mm", e.g. "13:00"
-  status       SlotStatus @default(ACTIVE)
+  id            String     @id @default(uuid()) @db.Uuid
+  offeringId    String     @db.Uuid
+  periodId      String     @db.Uuid
+  lecturerId    String     @db.Uuid
+  venueId       String     @db.Uuid
+  day           DayOfWeek
+  startTime     String
+  endTime       String
+  status        SlotStatus @default(ACTIVE)
+  version       Int        @default(1)
+  archivedAt    DateTime?
+  archiveReason String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 
-  // Rescheduling attributes (SPEC-004)
-  rescheduledToVenueId   String?
-  rescheduledStartTime   String?
-  rescheduledEndTime     String?
-  rescheduledDay         DayOfWeek?
-  rescheduleReason       String?
+  offering  CourseOffering     @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+  period    AcademicPeriod     @relation(fields: [periodId], references: [id], onDelete: Restrict)
+  lecturer  User               @relation("LecturerSlots", fields: [lecturerId], references: [id], onDelete: Restrict)
+  venue     Venue              @relation(fields: [venueId], references: [id], onDelete: Restrict)
+  overrides ScheduleOverride[]
+  changes   ScheduleChange[]
 
-  academicYear String     @default("2026/2027")
-  semester     Int        @default(1)
-  version      Int        @default(1)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  @@index([periodId, day, venueId, status])
+  @@index([periodId, day, lecturerId, status])
+  @@index([periodId, day, offeringId, status])
+  @@index([offeringId, status])
+}
 
-  course       Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  lecturer     User       @relation("LecturerSlots", fields: [lecturerId], references: [id], onDelete: Restrict)
-  venue        Venue      @relation("VenueAssigned", fields: [venueId], references: [id], onDelete: Restrict)
-  rescheduledVenue Venue? @relation("RescheduledVenueAssigned", fields: [rescheduledToVenueId], references: [id], onDelete: SetNull)
-  cohort       Cohort     @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+model ScheduleOverride {
+  id                   String               @id @default(uuid()) @db.Uuid
+  entryId              String               @db.Uuid
+  occurrenceDate       DateTime             @db.Date
+  type                 ScheduleOverrideType
+  replacementDate      DateTime?            @db.Date
+  replacementDay       DayOfWeek?
+  replacementStartTime String?
+  replacementEndTime   String?
+  replacementVenueId   String?              @db.Uuid
+  reason               String
+  createdById          String               @db.Uuid
+  version              Int                  @default(1)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
 
-  @@index([cohortId, day])
-  @@index([venueId, day])
-  @@index([lecturerId, day])
+  entry            TimetableEntry   @relation(fields: [entryId], references: [id], onDelete: Restrict)
+  replacementVenue Venue?           @relation(fields: [replacementVenueId], references: [id], onDelete: Restrict)
+  createdBy        User             @relation("OverrideCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  changes          ScheduleChange[]
+
+  @@unique([entryId, occurrenceDate])
+  @@index([occurrenceDate, type])
+}
+
+model ScheduleChange {
+  id         String             @id @default(uuid()) @db.Uuid
+  entryId    String             @db.Uuid
+  overrideId String?            @db.Uuid
+  idempotencyKey String?
+  changeType ScheduleChangeType
+  before     Json
+  after      Json
+  actorId    String             @db.Uuid
+  reason     String
+  createdAt  DateTime           @default(now())
+
+  entry         TimetableEntry    @relation(fields: [entryId], references: [id], onDelete: Restrict)
+  override      ScheduleOverride? @relation(fields: [overrideId], references: [id], onDelete: Restrict)
+  actor         User              @relation("ChangeActor", fields: [actorId], references: [id], onDelete: Restrict)
+  notifications Notification[]
+
+  @@index([entryId, createdAt])
+  @@index([actorId, createdAt])
+  @@unique([actorId, idempotencyKey])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String   @db.Uuid
+  action     String
+  entityType String
+  entityId   String
+  metadata   Json
+  createdAt  DateTime @default(now())
+
+  actor User @relation("AuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId, createdAt])
+  @@index([action, createdAt])
 }
 
 model ImportJob {
-  id           String       @id @default(uuid())
+  id           String       @id @default(uuid()) @db.Uuid
   fileName     String
   fileSize     Int
   mimeType     String
-  uploadedById String
-  status       ImportStatus @default(PENDING)
+  createdById  String       @db.Uuid
+  periodId     String       @db.Uuid
+  status       ImportStatus @default(UPLOADED)
   totalRows    Int          @default(0)
   validRows    Int          @default(0)
   conflictRows Int          @default(0)
   errorLog     String?
+  checksum     String
+  storageKey   String
+  version      Int          @default(1)
+  publishedAt  DateTime?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  uploadedBy   User         @relation("UploadedBy", fields: [uploadedById], references: [id])
+  createdBy     User                   @relation("ImportCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  period        AcademicPeriod         @relation(fields: [periodId], references: [id], onDelete: Restrict)
   stagedEntries StagedTimetableEntry[]
+
+  @@unique([periodId, checksum])
+  @@index([createdById, createdAt])
+  @@index([periodId, status, createdAt])
 }
 
 model StagedTimetableEntry {
-  id                 String       @id @default(uuid())
-  jobId              String
-  rawRowIndex        Int
-  rawCourseCode      String?
-  rawCourseTitle     String?
-  rawVenue           String?
-  rawDay             String?
-  rawTime            String?
-  rawLecturer        String?
-  rawCohort          String?
-
-  // Normalized / Resolved relations
-  resolvedCourseId   String?
-  resolvedVenueId    String?
-  resolvedLecturerId String?
-  resolvedCohortId   String?
-  normalizedDay      DayOfWeek?
+  id                  String                 @id @default(uuid()) @db.Uuid
+  jobId               String                 @db.Uuid
+  rawRowIndex         Int
+  rawCourseCode       String?
+  rawCourseTitle      String?
+  rawVenue            String?
+  rawDay              String?
+  rawTime             String?
+  rawLecturer         String?
+  rawCohort           String?
+  resolvedCourseId    String?                @db.Uuid
+  resolvedVenueId     String?                @db.Uuid
+  resolvedLecturerId  String?                @db.Uuid
+  resolvedCohortId    String?                @db.Uuid
+  resolvedOfferingId  String?                @db.Uuid
+  normalizedDay       DayOfWeek?
   normalizedStartTime String?
   normalizedEndTime   String?
+  validationStatus    StagedValidationStatus @default(PENDING)
+  errors              Json                   @default("[]")
+  conflicts           Json                   @default("[]")
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
 
-  validationStatus   String       @default("PENDING") // VALID, CONFLICT, UNRESOLVED
-  conflictSeverity   String?      // BLOCKING, WARNING, INFO
-  conflictMessage    String?
+  importJob ImportJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
-  importJob          ImportJob    @relation(fields: [jobId], references: [id], onDelete: Cascade)
-
-  @@index([jobId])
+  @@unique([jobId, rawRowIndex])
+  @@index([jobId, validationStatus])
 }
 
 model Notification {
-  id          String           @id @default(uuid())
-  userId      String
-  title       String
-  message     String
-  type        NotificationType @default(GENERAL)
-  isRead      Boolean          @default(false)
-  linkUrl     String?
-  createdAt   DateTime         @default(now())
+  id             String           @id @default(uuid()) @db.Uuid
+  recipientId    String           @db.Uuid
+  sourceChangeId String?          @db.Uuid
+  title          String
+  message        String
+  type           NotificationType
+  readAt         DateTime?
+  createdAt      DateTime         @default(now())
 
-  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipient    User            @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  sourceChange ScheduleChange? @relation(fields: [sourceChangeId], references: [id], onDelete: Restrict)
 
-  @@index([userId, isRead])
+  @@unique([recipientId, sourceChangeId])
+  @@index([recipientId, readAt, createdAt])
 }
 
 model Announcement {
-  id        String   @id @default(uuid())
-  title     String
-  content   String
-  authorId  String
-  cohortId  String?
-  courseId  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String               @id @default(uuid()) @db.Uuid
+  title      String
+  content    String
+  authorId   String               @db.Uuid
+  cohortId   String?              @db.Uuid
+  offeringId String?              @db.Uuid
+  priority   AnnouncementPriority @default(NORMAL)
+  expiresAt  DateTime?
+  archivedAt DateTime?
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
 
-  author    User     @relation("AuthorAnnouncements", fields: [authorId], references: [id], onDelete: Cascade)
-  cohort    Cohort?  @relation(fields: [cohortId], references: [id], onDelete: SetNull)
-  course    Course?  @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  author   User            @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  cohort   Cohort?         @relation(fields: [cohortId], references: [id], onDelete: Restrict)
+  offering CourseOffering? @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+
+  @@index([cohortId, archivedAt, expiresAt, createdAt])
+  @@index([offeringId, archivedAt, expiresAt, createdAt])
 }

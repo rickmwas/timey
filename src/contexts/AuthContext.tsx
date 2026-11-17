@@ -1,59 +1,83 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
-import type { AuthUser, Role } from '../types';
-import { DEMO_ACCOUNTS, USERS } from '../data/mock';
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import type { AuthUser } from "../types";
+import { ApiRequestError, apiRequest, normalizeAuthUser, type ApiUser } from "../lib/api-client";
 
 interface AuthContextValue {
   user: AuthUser | null;
   login: (identifier: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  logout: () => void;
+  logout: () => Promise<{ success: boolean; error?: string }>;
   isAuthenticated: boolean;
+  isLoading: boolean;
+  sessionError: string | null;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function getSessionStorage(): Storage | null {
-  if (typeof window === "undefined") return null;
-  return window.sessionStorage;
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    const stored = getSessionStorage()?.getItem('timy_user');
-    return stored ? JSON.parse(stored) : null;
-  });
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    async function restoreSession() {
+      try {
+        const result = await apiRequest<{ user: ApiUser }>("/api/v1/auth/me");
+        if (active) setUser(normalizeAuthUser(result.user));
+      } catch (error) {
+        if (
+          active &&
+          !(error instanceof ApiRequestError && error.status === 401)
+        ) {
+          setSessionError(
+            error instanceof Error ? error.message : "Could not restore your session",
+          );
+        }
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    }
+
+    void restoreSession();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const login = useCallback(async (identifier: string, password: string) => {
-    await new Promise(r => setTimeout(r, 600));
-    const account = DEMO_ACCOUNTS.find(
-      a => a.identifier === identifier && a.password === password
-    );
-    if (!account) {
-      return { success: false, error: 'Invalid credentials. Please check your ID and password.' };
+    setSessionError(null);
+    try {
+      const result = await apiRequest<{ user: ApiUser }>("/api/v1/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ identifier, password }),
+      });
+      setUser(normalizeAuthUser(result.user));
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Login failed",
+      };
     }
-    const dbUser = USERS.find(u => u.identifier === identifier);
-    if (!dbUser) {
-      return { success: false, error: 'User account not found.' };
-    }
-    const authUser: AuthUser = {
-      id: dbUser.id,
-      identifier: dbUser.identifier,
-      name: dbUser.name,
-      email: dbUser.email,
-      role: dbUser.role as Role,
-      cohortId: dbUser.cohortId,
-    };
-    getSessionStorage()?.setItem('timy_user', JSON.stringify(authUser));
-    setUser(authUser);
-    return { success: true };
   }, []);
 
   const logout = useCallback(() => {
-    getSessionStorage()?.removeItem('timy_user');
-    setUser(null);
+    return apiRequest<{ loggedOut: boolean }>("/api/v1/auth/logout", {
+      method: "POST",
+    })
+      .then(() => {
+        setUser(null);
+        return { success: true };
+      })
+      .catch((error: unknown) => ({
+        success: false,
+        error: error instanceof Error ? error.message : "Sign out failed",
+      }));
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user, isLoading, sessionError }}>
       {children}
     </AuthContext.Provider>
   );

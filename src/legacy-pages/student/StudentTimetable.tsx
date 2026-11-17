@@ -1,27 +1,25 @@
 "use client";
 
 import { useState } from 'react';
-import { Search, Filter } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { Layout } from '../../components/layout/Layout';
 import { Card } from '../../components/ui/Card';
 import { TimetableCard } from '../../components/timetable/TimetableCard';
 import { TimetableStatusBadge } from '../../components/ui/StatusBadge';
-import { TIMETABLE_ENTRIES, COHORTS } from '../../data/mock';
-import { useAuth } from '../../contexts/AuthContext';
 import { DAY_ORDER, DAY_LABELS, formatTime } from '../../lib/utils';
 import type { Day } from '../../types';
+import { useTimetableEntries } from '../../hooks/use-timetable';
 
 type ViewMode = 'week' | 'list' | 'day';
 
 export function StudentTimetable() {
-  const { user } = useAuth();
+  const { entries, isLoading, error } = useTimetableEntries();
   const [view, setView] = useState<ViewMode>('week');
   const [selectedDay, setSelectedDay] = useState<Day>('MONDAY');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
 
-  const cohort = COHORTS.find(c => c.id === user?.cohortId) ?? COHORTS[0];
-  const entries = TIMETABLE_ENTRIES.filter(e => e.cohortId === cohort.id);
+  const cohortName = entries[0]?.cohort.name ?? "Your cohort";
 
   const filtered = entries.filter(e => {
     const matchSearch = !search ||
@@ -40,7 +38,7 @@ export function StudentTimetable() {
       <div className="mb-5 flex flex-col sm:flex-row sm:items-center gap-3">
         <div>
           <h1 className="font-display text-2xl text-slate-900">My Timetable</h1>
-          <p className="text-sm text-slate-500">{cohort.name} · 2024/2025 Semester 1</p>
+          <p className="text-sm text-slate-500">{cohortName} · This week</p>
         </div>
 
         <div className="sm:ml-auto flex items-center gap-2">
@@ -84,6 +82,11 @@ export function StudentTimetable() {
       </div>
 
       {/* Week view */}
+      {error && <Card className="mb-4 border-red-200 text-sm text-red-700" role="alert">{error}</Card>}
+      {isLoading ? (
+        <Card className="py-12 text-center"><p role="status" className="text-sm text-slate-500">Loading your timetable…</p></Card>
+      ) : (
+      <>
       {view === 'week' && (
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           {weekdays.map(day => {
@@ -187,6 +190,8 @@ export function StudentTimetable() {
             )}
           </div>
         </Card>
+      )}
+      </>
       )}
     </Layout>
   );

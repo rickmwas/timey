@@ -1,0 +1,1 @@
+ALTER TABLE "Venue" ADD COLUMN "isUnderMaintenance" BOOLEAN NOT NULL DEFAULT false;

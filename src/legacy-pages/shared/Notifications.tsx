@@ -5,10 +5,11 @@ import { Bell, CheckCheck, Megaphone, MapPin, RefreshCw, X, AlertCircle } from '
 import { Layout } from '../../components/layout/Layout';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { useAuth } from '../../contexts/AuthContext';
-import { NOTIFICATIONS } from '../../data/mock';
 import { timeAgo } from '../../lib/utils';
-import type { Notification, NotificationType } from '../../types';
+import type { NotificationType } from '../../types';
+import { useApiCollection } from '../../hooks/use-api-collection';
+import { apiRequest } from '../../lib/api-client';
+import { toNotification, type ApiNotification } from '../../lib/notification-adapter';
 
 const typeConfig: Record<NotificationType, { icon: React.ReactNode; color: string }> = {
   VENUE_SWAP: { icon: <MapPin size={15} />, color: 'text-blue-600 bg-blue-100' },
@@ -29,20 +30,36 @@ const typeLabels: Record<NotificationType, string> = {
 };
 
 export function Notifications() {
-  const { user } = useAuth();
-  const allNotifications = NOTIFICATIONS.filter(n => n.userId === user?.id);
-  const [notifications, setNotifications] = useState<Notification[]>(allNotifications.length > 0 ? allNotifications : NOTIFICATIONS);
+  const { items, isLoading, error, refresh } = useApiCollection<ApiNotification>("/api/v1/notifications");
+  const [actionError, setActionError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const notifications = items.map(toNotification);
 
   const displayed = filter === 'unread' ? notifications.filter(n => !n.read) : notifications;
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  function markAllRead() {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  async function markAllRead() {
+    setActionError(null);
+    try {
+      await apiRequest<{ updatedCount: number }>("/api/v1/notifications/mark-all-read", {
+        method: "POST",
+      });
+      await refresh();
+    } catch (requestError) {
+      setActionError(requestError instanceof Error ? requestError.message : "Could not update notifications");
+    }
   }
 
-  function markRead(id: string) {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  async function markRead(id: string) {
+    setActionError(null);
+    try {
+      await apiRequest<{ id: string; changed: boolean }>(`/api/v1/notifications/${id}/read`, {
+        method: "PATCH",
+      });
+      await refresh();
+    } catch (requestError) {
+      setActionError(requestError instanceof Error ? requestError.message : "Could not update notification");
+    }
   }
 
   return (
@@ -59,6 +76,9 @@ export function Notifications() {
         )}
       </div>
 
+      {actionError && <p className="mb-4 text-sm text-red-700" role="alert">{actionError}</p>}
+      {error && <p className="mb-4 text-sm text-red-700" role="alert">{error}</p>}
+
       {/* Filter tabs */}
       <div className="flex gap-1 mb-5 bg-slate-100 p-1 rounded-lg w-fit">
         {(['all', 'unread'] as const).map(f => (
@@ -72,7 +92,9 @@ export function Notifications() {
         ))}
       </div>
 
-      {displayed.length === 0 ? (
+      {isLoading ? (
+        <Card className="text-center py-12"><p role="status" className="text-sm text-slate-500">Loading notifications…</p></Card>
+      ) : displayed.length === 0 ? (
         <Card className="text-center py-12">
           <Bell size={32} className="mx-auto text-slate-300 mb-3" />
           <p className="text-slate-500 text-sm">No {filter === 'unread' ? 'unread ' : ''}notifications</p>
@@ -85,7 +107,7 @@ export function Notifications() {
               <Card
                 key={n.id}
                 className={`cursor-pointer hover:shadow-md transition-all ${!n.read ? 'border-l-4 border-l-[#3b6fd4]' : ''}`}
-                onClick={() => markRead(n.id)}
+                onClick={() => { if (!n.read) void markRead(n.id); }}
               >
                 <div className="flex items-start gap-3">
                   <div className={`p-2 rounded-lg flex-shrink-0 ${config.color}`}>
