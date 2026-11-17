@@ -1,20 +1,36 @@
 "use client";
 
-import { Clock, BookOpen, MapPin, AlertTriangle, Megaphone, WifiOff } from 'lucide-react';
+import { Clock, BookOpen, MapPin, AlertTriangle, Megaphone, WifiOff, BellRing } from 'lucide-react';
 import { Layout } from '../../components/layout/Layout';
 import { Card, StatCard } from '../../components/ui/Card';
 import { TimetableCard } from '../../components/timetable/TimetableCard';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTimetable } from '../../hooks/use-timetable';
 import { useNotifications } from '../../hooks/use-notifications';
+import { useRealtimeNotifications } from '../../hooks/use-realtime-notifications';
+import { useClassCountdown } from '../../hooks/use-class-countdown';
+import { DemoSimulatorToolbar } from '../../components/demo/DemoSimulatorToolbar';
 import { ANNOUNCEMENTS, COHORTS } from '../../data/mock';
 import { getTodayDay, formatTime, DAY_LABELS, timeAgo } from '../../lib/utils';
 
 export function StudentDashboard() {
   const { user } = useAuth();
-  const { entries, todayEntries, nextClass, isLoading, isOffline, lastSyncedAt } = useTimetable();
+  const { entries, todayEntries, nextClass, isLoading, isOffline, lastSyncedAt, refresh } = useTimetable();
   const { notifications, unreadCount } = useNotifications();
   const todayDay = getTodayDay();
+
+  // Real-time phone streaming & live ringing
+  const {
+    isConnected: isSseConnected,
+    isAudioUnlocked,
+    lastEvent,
+    enableAudioAndAlerts,
+    simulateAlert,
+  } = useRealtimeNotifications(refresh);
+
+  // 30m and 10m countdown reminders
+  const { minutesUntilStart, nextEntry, triggerSimulated30m, triggerSimulated10m } =
+    useClassCountdown(todayEntries);
 
   const studentCohort = COHORTS.find(c => c.id === user?.cohortId) ?? COHORTS[0];
   const recentAnnouncements = ANNOUNCEMENTS.slice(0, 3);
@@ -27,6 +43,26 @@ export function StudentDashboard() {
 
   return (
     <Layout breadcrumb={[{ label: 'Dashboard' }]}>
+      {/* Live Event Banner (when a real-time modification just arrived) */}
+      {lastEvent && (
+        <div className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-xs px-4 py-3 rounded-2xl flex items-center justify-between mb-5 shadow-lg animate-bounce">
+          <div className="flex items-center gap-2.5">
+            <BellRing size={16} className="text-white animate-pulse" />
+            <div>
+              <p className="font-bold text-sm">
+                Live Alert: {lastEvent.courseCode || "Schedule"} {lastEvent.type.toLowerCase()}
+              </p>
+              <p className="text-emerald-100">
+                {lastEvent.message || `Venue moved to ${lastEvent.newVenue || "updated hall"}.`}
+              </p>
+            </div>
+          </div>
+          <span className="text-[11px] bg-white/20 px-2 py-0.5 rounded-full font-mono">
+            Just now
+          </span>
+        </div>
+      )}
+
       {/* Ambient Offline Banner */}
       {isOffline && (
         <div className="bg-amber-50 text-amber-900 text-xs px-3.5 py-2.5 rounded-xl flex items-center gap-2 border border-amber-200 mb-5 shadow-sm">
@@ -40,15 +76,27 @@ export function StudentDashboard() {
       )}
 
       {/* Welcome bar */}
-      <div className="mb-6">
-        <h1 className="font-display text-2xl text-slate-900">
-          Good {currentHour < 12 ? 'morning' : currentHour < 17 ? 'afternoon' : 'evening'},{' '}
-          <span className="text-[#1a2f5c]">{user?.name ? user.name.split(' ')[0] : 'Student'}</span>
-        </h1>
-        <p className="text-slate-500 text-sm mt-0.5">
-          {studentCohort.name} · {studentCohort.academicYear} Semester {studentCohort.semester} ·{' '}
-          {new Date().toLocaleDateString('en-KE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-        </p>
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl text-slate-900">
+            Good {currentHour < 12 ? 'morning' : currentHour < 17 ? 'afternoon' : 'evening'},{' '}
+            <span className="text-[#1a2f5c]">{user?.name ? user.name.split(' ')[0] : 'Student'}</span>
+          </h1>
+          <p className="text-slate-500 text-sm mt-0.5">
+            {studentCohort.name} · {studentCohort.academicYear} Semester {studentCohort.semester} ·{' '}
+            {new Date().toLocaleDateString('en-KE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </p>
+        </div>
+
+        {/* Realtime Countdown Pill */}
+        {nextEntry && minutesUntilStart !== null && minutesUntilStart > 0 && (
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-xs text-[#1a2f5c] font-medium shadow-sm">
+            <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
+            <span>
+              Next: <strong>{nextEntry.course.code}</strong> in <strong>{minutesUntilStart} mins</strong> ({nextEntry.venue.code})
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Stats */}
@@ -189,6 +237,25 @@ export function StudentDashboard() {
           </Card>
         </div>
       </div>
+
+      {/* Floating Demo Presentation Toolbar */}
+      <DemoSimulatorToolbar
+        isSseConnected={isSseConnected}
+        isAudioUnlocked={isAudioUnlocked}
+        onEnableAudio={enableAudioAndAlerts}
+        onSimulate30m={triggerSimulated30m}
+        onSimulate10m={triggerSimulated10m}
+        onSimulateReschedule={() =>
+          simulateAlert({
+            type: "RESCHEDULED",
+            courseCode: "SOEN 311",
+            courseTitle: "Software Engineering II",
+            newVenue: "LH 28",
+            day: "WEDNESDAY",
+            message: "Dr. James Omondi rescheduled SOEN 311 to LH 28 (Floor 1).",
+          })
+        }
+      />
     </Layout>
   );
 }

@@ -151,7 +151,7 @@ export async function triggerSystemNotification(title: string, body: string) {
           icon: '/icons/icon-192.svg',
           badge: '/icons/icon-192.svg',
           tag: `timy-${Date.now()}`,
-          vibrate: [200, 100, 200, 100, 400],
+          ...( { vibrate: [200, 100, 200, 100, 400] } as any ),
         });
         return;
       }
