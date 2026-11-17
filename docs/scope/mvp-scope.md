@@ -33,3 +33,24 @@ As formally stipulated in Section 7 of the Project Proposal:
 - ❌ **Examination Timetabling & Invigilation**: Examination room allocation and exam conflict resolution have distinct constraints and are excluded.
 - ❌ **Financial / Fee Management**: Fee statements, payment integration, and bursary records are outside Timy's domain.
 - ❌ **Grading and Transcripts**: Academic grading, marks entry, and GPA calculations are excluded.
+
+## 4. Public Product Experience
+
+### Timy public landing page
+
+**Intent**: Introduce Timy to visitors before they enter the existing university portal, while preserving authentication, role access, and current system behavior.
+
+**Status**: in-progress
+
+**Spec**: [SPEC-005](../specs/SPEC-005-public-timy-landing-page.md)
+
+**Done when**: Visitors can understand Timy's current capabilities and reach sign in or account access guidance. Existing users still reach the role appropriate dashboard, and public content remains responsive, accessible, and accurate about API only capabilities.
+
+- [x] Design it (spec)
+- [ ] Build it: `/develop Timy public landing page`
+  - [ ] Public routes and authentication redirects are preserved (AC-1 to AC-5).
+  - [ ] The product story, verified feature sections, and safe demonstrations are in place (AC-6 to AC-9).
+  - [ ] Responsive images, navigation, and reduced motion behavior are complete (AC-9 to AC-11).
+  - [ ] Metadata, crawler rules, and focused test coverage are complete (AC-1 to AC-12).
+- [ ] Verify it: `/check verify Timy public landing page`
+- [ ] Test it: `/test Timy public landing page`
