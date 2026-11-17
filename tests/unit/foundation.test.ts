@@ -55,7 +55,7 @@ describe("environment validation", () => {
       }),
     ).toMatchObject({
       APP_URL: "http://localhost:3000",
-      STORAGE_LOCAL_DIR: ".timy-uploads",
+      STORAGE_LOCAL_DIR: "../timy-local-storage",
       LOG_LEVEL: "info",
     });
   });
