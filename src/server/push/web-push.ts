@@ -48,16 +48,16 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
             },
           };
 
-          await sendNotification(
-            pushSubscription,
-            JSON.stringify({
-              title: payload.title,
-              message: payload.message,
-              url: payload.url || "/timetable",
-              tag: payload.tag || "timy-alert",
-              type: payload.type || "ALERT",
-            })
-          );
+            await sendNotification(
+              pushSubscription,
+              JSON.stringify({
+                title: payload.title,
+                message: payload.message,
+                url: payload.url || "/timetable",
+                tag: payload.tag || "timy-alert",
+                type: payload.type || "ALERT",
+              })
+            );
           successCount++;
         } catch (err: any) {
           // If subscription has expired or unsubscribed, queue for deletion
