@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from 'react';
-import { Bell, CheckCheck, Megaphone, MapPin, RefreshCw, X, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
+import { Bell, CheckCheck, Megaphone, MapPin, RefreshCw, X, AlertCircle, Settings } from 'lucide-react';
 import { Layout } from '../../components/layout/Layout';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -48,11 +49,19 @@ export function Notifications() {
           <h1 className="font-display text-2xl text-slate-900">Notifications</h1>
           <p className="text-slate-500 text-sm">{unreadCount} unread · {notifications.length} total</p>
         </div>
-        {unreadCount > 0 && (
-          <Button variant="outline" size="sm" className="sm:ml-auto" onClick={markAllAsRead}>
-            <CheckCheck size={15} /> Mark all as read
-          </Button>
-        )}
+        <div className="flex items-center gap-2 sm:ml-auto">
+          {unreadCount > 0 && (
+            <Button variant="outline" size="sm" onClick={markAllAsRead}>
+              <CheckCheck size={15} /> Mark all as read
+            </Button>
+          )}
+          <Link href="/settings">
+            <Button variant="outline" size="sm" title="Alert & Push Settings">
+              <Settings size={15} />
+              <span className="hidden sm:inline">Settings</span>
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Filter tabs */}

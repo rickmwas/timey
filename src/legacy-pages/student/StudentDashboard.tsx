@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, BookOpen, MapPin, AlertTriangle, Megaphone, WifiOff, BellRing } from 'lucide-react';
+import { Clock, BookOpen, MapPin, AlertTriangle, Megaphone, WifiOff, BellRing, Volume2 } from 'lucide-react';
 import { Layout } from '../../components/layout/Layout';
 import { Card, StatCard } from '../../components/ui/Card';
 import { TimetableCard } from '../../components/timetable/TimetableCard';
@@ -9,7 +9,6 @@ import { useTimetable } from '../../hooks/use-timetable';
 import { useNotifications } from '../../hooks/use-notifications';
 import { useRealtimeNotifications } from '../../hooks/use-realtime-notifications';
 import { useClassCountdown } from '../../hooks/use-class-countdown';
-import { DemoSimulatorToolbar } from '../../components/demo/DemoSimulatorToolbar';
 import { ANNOUNCEMENTS, COHORTS } from '../../data/mock';
 import { getTodayDay, formatTime, DAY_LABELS, timeAgo } from '../../lib/utils';
 
@@ -25,12 +24,10 @@ export function StudentDashboard() {
     isAudioUnlocked,
     lastEvent,
     enableAudioAndAlerts,
-    simulateAlert,
   } = useRealtimeNotifications(refresh);
 
   // 30m and 10m countdown reminders
-  const { minutesUntilStart, nextEntry, triggerSimulated30m, triggerSimulated10m } =
-    useClassCountdown(todayEntries);
+  const { minutesUntilStart, nextEntry } = useClassCountdown(todayEntries);
 
   const studentCohort = COHORTS.find(c => c.id === user?.cohortId) ?? COHORTS[0];
   const recentAnnouncements = ANNOUNCEMENTS.slice(0, 3);
@@ -43,6 +40,27 @@ export function StudentDashboard() {
 
   return (
     <Layout breadcrumb={[{ label: 'Dashboard' }]}>
+      {/* Real-time Audio Alert Activator (Browsers require user gesture to play chime audio) */}
+      {!isAudioUnlocked && (
+        <div className="bg-gradient-to-r from-slate-900 to-blue-950 text-white p-3.5 rounded-2xl flex items-center justify-between mb-5 shadow-sm border border-slate-800/80">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+              <Volume2 size={17} className="text-blue-400" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-white">Enable Audio Chimes & Notifications</p>
+              <p className="text-[11px] text-slate-300">Allow instant ringer on venue shifts and 30m/10m countdown alerts</p>
+            </div>
+          </div>
+          <button
+            onClick={enableAudioAndAlerts}
+            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-xs font-semibold rounded-xl transition-all shadow-sm shrink-0 ml-2"
+          >
+            Turn On
+          </button>
+        </div>
+      )}
+
       {/* Live Event Banner (when a real-time modification just arrived) */}
       {lastEvent && (
         <div className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-xs px-4 py-3 rounded-2xl flex items-center justify-between mb-5 shadow-lg animate-bounce">
@@ -237,25 +255,6 @@ export function StudentDashboard() {
           </Card>
         </div>
       </div>
-
-      {/* Floating Demo Presentation Toolbar */}
-      <DemoSimulatorToolbar
-        isSseConnected={isSseConnected}
-        isAudioUnlocked={isAudioUnlocked}
-        onEnableAudio={enableAudioAndAlerts}
-        onSimulate30m={triggerSimulated30m}
-        onSimulate10m={triggerSimulated10m}
-        onSimulateReschedule={() =>
-          simulateAlert({
-            type: "RESCHEDULED",
-            courseCode: "SOEN 311",
-            courseTitle: "Software Engineering II",
-            newVenue: "LH 28",
-            day: "WEDNESDAY",
-            message: "Dr. James Omondi rescheduled SOEN 311 to LH 28 (Floor 1).",
-          })
-        }
-      />
     </Layout>
   );
 }

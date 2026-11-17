@@ -1,5 +1,8 @@
-import webpush from "web-push";
+import * as webPushLib from "web-push";
 import { db } from "@/lib/db";
+
+// Handle ESM/CJS interop safely across bundlers
+const webpush = (webPushLib as any).default || webPushLib;
 
 // Default standard VAPID key pair (can be overridden in production via process.env)
 const DEFAULT_VAPID_PUBLIC =

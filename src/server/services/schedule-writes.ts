@@ -12,6 +12,7 @@ import { detectSlotConflicts, type SlotLike } from "@/server/services/conflicts"
 import { buildNotificationMessage, buildScheduleChangeMetadata, type ScheduleChangeType as ScheduleChangeLabel } from "@/server/services/schedule-ops";
 import { createNotificationBatch } from "@/server/services/notifications";
 import { eventBus } from "@/server/events/event-bus";
+import { sendPushToCohort } from "@/server/push/web-push";
 
 type MutationAction = "reschedule" | "cancel" | "postpone";
 type MutationInput = {
@@ -404,6 +405,14 @@ export async function writeScheduleChange(
         recipientIds: recipients.map((r) => r.id),
         message,
       });
+
+      // Dispatch native Web Push to student devices (lockscreen waking)
+      sendPushToCohort(entry.offering.cohortId, {
+        title: `${entry.offering.course.code}: ${changeType.replaceAll("_", " ").toLowerCase()}`,
+        message,
+        url: "/timetable",
+        tag: `schedule-change-${entryId}`,
+      }).catch((err) => console.warn("[ScheduleWrites] Web push notice:", err));
 
       return { change, override, notificationCount, replayed: false };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
