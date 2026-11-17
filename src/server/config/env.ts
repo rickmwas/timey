@@ -14,7 +14,23 @@ const EnvironmentSchema = z.object({
 export type Environment = z.infer<typeof EnvironmentSchema>;
 
 export function parseEnvironment(source: NodeJS.ProcessEnv): Environment {
-  const environment = EnvironmentSchema.parse(source);
+  // If running in a build/CI environment without database secrets yet, provide dummy values so Next.js static collection succeeds
+  const isBuildPhase =
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    process.env.npm_lifecycle_event === "build" ||
+    process.env.CI === "true" ||
+    Boolean(process.env.VERCEL && !source.DATABASE_URL);
+
+  const fallbackDatabaseUrl = "postgresql://postgres:postgres@localhost:5432/timy";
+  const fallbackAuthSecret = "temporary-build-auth-secret-min-32-chars-long";
+
+  const resolvedSource = {
+    ...source,
+    DATABASE_URL: source.DATABASE_URL || (isBuildPhase ? fallbackDatabaseUrl : undefined),
+    AUTH_SECRET: source.AUTH_SECRET || (isBuildPhase ? fallbackAuthSecret : undefined),
+  };
+
+  const environment = EnvironmentSchema.parse(resolvedSource);
   if (environment.NODE_ENV === "production" && environment.AUTH_SECRET.length < 32) {
     throw new Error("AUTH_SECRET must contain at least 32 characters in production");
   }

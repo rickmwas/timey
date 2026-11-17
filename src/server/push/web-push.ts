@@ -1,4 +1,4 @@
-import webpush from "web-push";
+import { setVapidDetails, sendNotification } from "web-push";
 import { db } from "@/lib/db";
 
 // Default standard VAPID key pair (can be overridden in production via process.env)
@@ -10,7 +10,7 @@ const DEFAULT_VAPID_PRIVATE =
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:admin@kisii.ac.ke";
 
 try {
-  webpush.setVapidDetails(VAPID_SUBJECT, DEFAULT_VAPID_PUBLIC, DEFAULT_VAPID_PRIVATE);
+  setVapidDetails(VAPID_SUBJECT, DEFAULT_VAPID_PUBLIC, DEFAULT_VAPID_PRIVATE);
 } catch (err) {
   console.warn("[WebPush] setVapidDetails notice:", err);
 }
@@ -48,7 +48,7 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
             },
           };
 
-          await webpush.sendNotification(
+          await sendNotification(
             pushSubscription,
             JSON.stringify({
               title: payload.title,
