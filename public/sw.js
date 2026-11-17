@@ -80,7 +80,24 @@ self.addEventListener('push', (event) => {
     requireInteraction: true,
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    Promise.all([
+      self.registration.showNotification(title, options),
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+        for (const client of clients) {
+          client.postMessage({
+            type: 'TIMY_PUSH_NOTIFICATION',
+            payload: {
+              ...data,
+              courseCode: data.courseCode || title.replace('Timy: ', ''),
+              message: data.message || options.body,
+              timestamp: new Date().toISOString(),
+            },
+          });
+        }
+      }),
+    ])
+  );
 });
 
 // Message listener from active client tabs

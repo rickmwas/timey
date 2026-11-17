@@ -71,7 +71,35 @@ export function useRealtimeNotifications(onEventReceived?: () => void) {
   useEffect(() => {
     if (!user || typeof window === "undefined") return;
 
-    // Connect to Server-Sent Events stream
+    // 1. Service Worker Push Message Bridge (instant relay from Web Push)
+    const handleServiceWorkerMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === "TIMY_PUSH_NOTIFICATION") {
+        handleIncomingAlert(event.data.payload);
+      }
+    };
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.addEventListener("message", handleServiceWorkerMessage);
+    }
+
+    // 2. Revalidate when tab becomes visible or receives focus
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === "visible") {
+        onEventReceived?.();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+    window.addEventListener("focus", handleVisibilityOrFocus);
+    window.addEventListener("online", handleVisibilityOrFocus);
+
+    // 3. Lightweight Fallback Sync (every 15s when active)
+    const pollInterval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        onEventReceived?.();
+      }
+    }, 15000);
+
+    // 4. Server-Sent Events (SSE) Stream
     const params = new URLSearchParams();
     if (user.cohortId) params.append("cohortId", user.cohortId);
     if (user.id) params.append("userId", user.id);
@@ -104,8 +132,16 @@ export function useRealtimeNotifications(onEventReceived?: () => void) {
       es.close();
       eventSourceRef.current = null;
       setIsConnected(false);
+
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.removeEventListener("message", handleServiceWorkerMessage);
+      }
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+      window.removeEventListener("focus", handleVisibilityOrFocus);
+      window.removeEventListener("online", handleVisibilityOrFocus);
+      clearInterval(pollInterval);
     };
-  }, [user, handleIncomingAlert]);
+  }, [user, handleIncomingAlert, onEventReceived]);
 
   return {
     isConnected,
