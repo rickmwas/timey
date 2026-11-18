@@ -48,7 +48,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       token,
       request,
       body,
-      onBeforeGenerateToken: async (pathname, clientPayload) => {
+      onBeforeGenerateToken: async (pathname: string, clientPayload?: string | null) => {
         assertSameOrigin(request);
         const actor = await requireUser(request);
         requirePermission(actor, "import:manage");
