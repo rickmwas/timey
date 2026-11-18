@@ -12,7 +12,7 @@ import { detectSlotConflicts, type SlotLike } from "@/server/services/conflicts"
 import { buildNotificationMessage, buildScheduleChangeMetadata, type ScheduleChangeType as ScheduleChangeLabel } from "@/server/services/schedule-ops";
 import { createNotificationBatch } from "@/server/services/notifications";
 import { eventBus } from "@/server/events/event-bus";
-import { sendPushToCohort } from "@/server/push/web-push";
+import { sendPushToCohort, sendPushToRecipients } from "@/server/push/web-push";
 
 type MutationAction = "reschedule" | "cancel" | "postpone";
 type MutationInput = {
@@ -379,14 +379,20 @@ export async function writeScheduleChange(
 
       const recipients = await transaction.user.findMany({
         where: { cohortId: entry.offering.cohortId, role: Role.STUDENT, status: "ACTIVE" },
-        select: { id: true },
+        select: { id: true, cohortId: true },
       });
 
       // Also include any elective/retake students enrolled in this offering
       const individualEnrollments = await transaction.studentEnrollment.findMany({
         where: { offeringId: entry.offeringId, status: "ENROLLED" },
-        select: { studentId: true },
+        select: { studentId: true, student: { select: { id: true, cohortId: true } } },
       });
+
+      const affectedCohortIds = Array.from(new Set([
+        entry.offering.cohortId,
+        ...recipients.map((r) => r.cohortId).filter(Boolean) as string[],
+        ...individualEnrollments.map((e) => e.student.cohortId).filter(Boolean) as string[],
+      ]));
 
       const allRecipientIds = Array.from(new Set([
         ...recipients.map((r) => r.id),
@@ -420,6 +426,7 @@ export async function writeScheduleChange(
             endTime: next.endTime ?? undefined,
             reason: input.reason,
             cohortId: entry.offering.cohortId,
+            cohortIds: affectedCohortIds,
             recipientIds: allRecipientIds,
             message,
           },
@@ -440,11 +447,13 @@ export async function writeScheduleChange(
           endTime: next.endTime ?? undefined,
           reason: input.reason,
           cohortId: entry.offering.cohortId,
+          cohortIds: affectedCohortIds,
           recipientIds: allRecipientIds,
           message,
         });
 
-        sendPushToCohort(entry.offering.cohortId, {
+        // Broadcast Web Push to all student devices across cohorts
+        sendPushToRecipients(allRecipientIds, {
           title: `${entry.offering.course.code}: ${changeType.replaceAll("_", " ").toLowerCase()}`,
           message,
           url: "/timetable",

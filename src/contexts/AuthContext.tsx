@@ -4,10 +4,20 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import type { AuthUser, Role } from '../types';
 import { DEMO_ACCOUNTS, USERS } from '../data/mock';
 import { apiClient, ApiError } from '../lib/api-client';
+import { unlockAudioContext } from '../lib/audio-chime';
+
+export interface RegisterStudentData {
+  fullName: string;
+  email: string;
+  institutionalId: string;
+  password: string;
+  cohortId: string;
+}
 
 export interface AuthContextValue {
   user: AuthUser | null;
   login: (identifier: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  register: (data: RegisterStudentData) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   isOffline: boolean;
@@ -122,6 +132,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (identifier: string, password: string) => {
     setAuthError(null);
+    if (typeof window !== "undefined") {
+      try {
+        unlockAudioContext();
+        if ("Notification" in window && Notification.permission === "default") {
+          Notification.requestPermission().catch(() => {});
+        }
+      } catch {}
+    }
 
     // 1. First attempt live authentication against the backend API
     try {
@@ -183,6 +201,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { success: false, error: 'Authentication failed.' };
   }, []);
 
+  const register = useCallback(async (data: RegisterStudentData) => {
+    setAuthError(null);
+    if (typeof window !== "undefined") {
+      try {
+        unlockAudioContext();
+        if ("Notification" in window && Notification.permission === "default") {
+          Notification.requestPermission().catch(() => {});
+        }
+      } catch {}
+    }
+
+    try {
+      const res = await apiClient.auth.register(data);
+      if (res && res.user) {
+        const liveUser: AuthUser = {
+          id: res.user.id,
+          identifier: res.user.institutionalId || res.user.email,
+          name: res.user.fullName || res.user.name,
+          email: res.user.email,
+          role: res.user.role as Role,
+          cohortId: res.user.cohortId ?? undefined,
+        };
+        setUser(liveUser);
+        persistUser(liveUser);
+        setMode("live");
+        return { success: true };
+      }
+      return { success: false, error: "Registration response incomplete" };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: err.message || "Registration failed. Please try again.",
+      };
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await apiClient.auth.logout();
@@ -203,6 +257,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         login,
+        register,
         logout,
         isAuthenticated: !!user,
         isOffline,

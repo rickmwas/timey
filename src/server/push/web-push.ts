@@ -121,3 +121,25 @@ export async function sendPushToCohort(cohortId: string, payload: PushPayload): 
     return 0;
   }
 }
+
+/**
+ * Send Web Push notification to an explicit list of user IDs (supporting cross-cohort broadcasts)
+ */
+export async function sendPushToRecipients(recipientUserIds: string[], payload: PushPayload): Promise<number> {
+  if (!vapidConfigured || recipientUserIds.length === 0) {
+    return 0;
+  }
+
+  try {
+    const uniqueUserIds = Array.from(new Set(recipientUserIds));
+    let totalPushed = 0;
+    for (const userId of uniqueUserIds) {
+      const count = await sendPushToUser(userId, payload);
+      totalPushed += count;
+    }
+    return totalPushed;
+  } catch (error) {
+    console.warn("[WebPush] sendPushToRecipients database/network error:", error);
+    return 0;
+  }
+}

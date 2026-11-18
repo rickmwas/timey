@@ -47,7 +47,9 @@ export async function GET(request: NextRequest) {
         // Role-based recipient authorization
         if (!isPrivileged) {
           const isDirectRecipient = event.recipientIds && event.recipientIds.includes(targetUserId);
-          const isCohortMember = targetCohortId && event.cohortId === targetCohortId;
+          const isCohortMember =
+            (targetCohortId && event.cohortId === targetCohortId) ||
+            (targetCohortId && event.cohortIds && event.cohortIds.includes(targetCohortId));
 
           if (!isDirectRecipient && !isCohortMember) {
             return;

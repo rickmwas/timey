@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { AppError } from "@/server/errors/app-error";
 import { hashPassword, validatePassword, verifyPassword } from "@/server/auth/passwords";
 import { createRefreshToken, hashRefreshToken, refreshExpiry, signAccessToken } from "@/server/auth/tokens";
-import type { ChangePasswordInput, LoginInput } from "@/server/schemas/auth";
+import type { ChangePasswordInput, LoginInput, RegisterStudentInput } from "@/server/schemas/auth";
 
 const userSelect = {
   id: true,
@@ -45,6 +45,67 @@ export async function login(input: LoginInput, metadata: { userAgent: string | n
   if (!account || account.status !== "ACTIVE" || !(await verifyPassword(input.password, account.passwordHash))) {
     throw new AppError("INVALID_CREDENTIALS", "Invalid identifier or password", 401);
   }
+
+  const sessionId = randomUUID();
+  const refreshToken = createRefreshToken();
+  const now = new Date();
+  const session = await db.authSession.create({
+    data: {
+      id: sessionId,
+      userId: account.id,
+      familyId: sessionId,
+      refreshTokenHash: hashRefreshToken(refreshToken),
+      expiresAt: refreshExpiry(now),
+      userAgent: metadata.userAgent?.slice(0, 512) ?? null,
+      ipHash: hashIp(metadata.ip),
+    },
+  });
+
+  const accessToken = await signAccessToken({ userId: account.id, sessionId: session.id, role: account.role });
+  const user = await db.user.findUniqueOrThrow({ where: { id: account.id }, select: userSelect });
+  return { user, tokens: { accessToken, refreshToken } satisfies SessionTokens };
+}
+
+export async function registerStudent(input: RegisterStudentInput, metadata: { userAgent: string | null; ip: string | null }) {
+  const existing = await db.user.findFirst({
+    where: {
+      OR: [
+        { email: input.email.toLowerCase() },
+        { institutionalId: input.institutionalId },
+      ],
+    },
+  });
+
+  if (existing) {
+    throw new AppError("ACCOUNT_EXISTS", "A user with this email or admission number already exists", 409);
+  }
+
+  validatePassword(input.password, input.email, input.institutionalId);
+
+  const cohort = await db.cohort.findUnique({
+    where: { id: input.cohortId },
+    select: { id: true, departmentId: true, isActive: true },
+  });
+
+  if (!cohort || !cohort.isActive) {
+    throw new AppError("NOT_FOUND", "Selected academic cohort was not found or is inactive", 404);
+  }
+
+  const passwordHash = await hashPassword(input.password);
+
+  const account = await db.user.create({
+    data: {
+      email: input.email.toLowerCase(),
+      institutionalId: input.institutionalId,
+      fullName: input.fullName,
+      role: Role.STUDENT,
+      status: "ACTIVE",
+      mustChangePassword: false,
+      cohortId: cohort.id,
+      departmentId: cohort.departmentId,
+      passwordHash,
+    },
+  });
 
   const sessionId = randomUUID();
   const refreshToken = createRefreshToken();

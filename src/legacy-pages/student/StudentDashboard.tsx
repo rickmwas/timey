@@ -11,6 +11,7 @@ import { useRealtimeNotifications } from '../../hooks/use-realtime-notifications
 import { useClassCountdown } from '../../hooks/use-class-countdown';
 import { ANNOUNCEMENTS, COHORTS } from '../../data/mock';
 import { getTodayDay, formatTime, DAY_LABELS, timeAgo } from '../../lib/utils';
+import { playVenueChangeChime } from '../../lib/audio-chime';
 
 export function StudentDashboard() {
   const { user } = useAuth();
@@ -41,7 +42,7 @@ export function StudentDashboard() {
   return (
     <Layout breadcrumb={[{ label: 'Dashboard' }]}>
       {/* Real-time Audio Alert Activator (Browsers require user gesture to play chime audio) */}
-      {!isAudioUnlocked && (
+      {!isAudioUnlocked ? (
         <div className="bg-gradient-to-r from-slate-900 to-blue-950 text-white p-3.5 rounded-2xl flex items-center justify-between mb-5 shadow-sm border border-slate-800/80">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
@@ -57,6 +58,31 @@ export function StudentDashboard() {
             className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-xs font-semibold rounded-xl transition-all shadow-sm shrink-0 ml-2"
           >
             Turn On
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-5 px-4 py-2.5 bg-emerald-50/90 border border-emerald-200/80 rounded-2xl shadow-xs">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </span>
+            <span className="text-xs font-semibold text-emerald-800">
+              Live Schedule Ring & Alerts Active
+            </span>
+            <span className="hidden sm:inline-block text-[11px] text-emerald-600 border-l border-emerald-200 pl-2">
+              Connected via SSE · Audio Primed
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              playVenueChangeChime();
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white border border-emerald-300 hover:bg-emerald-100/50 active:scale-95 text-emerald-700 text-xs font-semibold transition-all shadow-2xs"
+            title="Verify your speaker and audio synthesizer"
+          >
+            <Volume2 size={13} />
+            <span>Test Device Ring</span>
           </button>
         </div>
       )}

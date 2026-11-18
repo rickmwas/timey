@@ -31,7 +31,12 @@ function scopedWhere(actor: AuthenticatedUser, query: TimetableReadQuery, entryI
     if (!actor.cohortId || (query.cohortId && query.cohortId !== actor.cohortId)) {
       throw new AppError("FORBIDDEN", "Students may only view their own cohort timetable", 403);
     }
-    where.offering = { cohortId: actor.cohortId };
+    where.offering = {
+      OR: [
+        { cohortId: actor.cohortId },
+        { studentEnrollments: { some: { studentId: actor.id, status: "ENROLLED" } } },
+      ],
+    };
   } else if (actor.role === Role.LECTURER) {
     if (query.lecturerId && query.lecturerId !== actor.id) {
       throw new AppError("FORBIDDEN", "Lecturers may only view their own teaching timetable", 403);
