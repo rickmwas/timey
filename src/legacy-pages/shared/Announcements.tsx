@@ -9,17 +9,42 @@ import { Modal } from '../../components/ui/Modal';
 import { Input, Select } from '../../components/ui/Input';
 import { Badge } from '../../components/ui/Badge';
 import { useAuth } from '../../contexts/AuthContext';
-import { ANNOUNCEMENTS, COHORTS, COURSES } from '../../data/mock';
 import { formatDate } from '../../lib/utils';
+import { useApiCollection } from '../../hooks/use-api-collection';
+import { apiRequest } from '../../lib/api-client';
+
+type CatalogCohort = {
+  id: string;
+  code: string;
+  name: string;
+};
+
+type ApiAnnouncement = {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  author: { id: string; fullName: string };
+  cohort: { id: string; code: string; name: string } | null;
+  offering: { id: string; course: { id: string; code: string; title: string } } | null;
+};
 
 export function Announcements() {
   const { user } = useAuth();
-  const canPost = user?.role === 'TIMETABLE_OFFICER' || user?.role === 'ADMIN';
+  const canPost = user?.role === 'LECTURER' || user?.role === 'TIMETABLE_OFFICER' || user?.role === 'ADMIN';
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [announcements, setAnnouncements] = useState(ANNOUNCEMENTS);
+  const [targetCohortId, setTargetCohortId] = useState('');
+  const [actionError, setActionError] = useState<string | null>(null);
+  const {
+    items: announcements,
+    isLoading,
+    error,
+    refresh,
+  } = useApiCollection<ApiAnnouncement>('/api/v1/announcements');
+  const { items: cohorts } = useApiCollection<CatalogCohort>('/api/v1/catalog/cohorts');
 
   const filtered = announcements.filter(a =>
     !search ||
@@ -27,20 +52,21 @@ export function Announcements() {
     a.content.toLowerCase().includes(search.toLowerCase())
   );
 
-  function handlePost() {
-    if (!title.trim() || !content.trim() || !user) return;
-    const newAnnouncement = {
-      id: `an${Date.now()}`,
-      authorId: user.id,
-      author: { id: user.id, identifier: user.identifier, name: user.name, email: user.email, role: user.role, active: true, createdAt: new Date().toISOString() },
-      title,
-      content,
-      createdAt: new Date().toISOString(),
-    };
-    setAnnouncements(prev => [newAnnouncement as typeof prev[0], ...prev]);
-    setShowModal(false);
-    setTitle('');
-    setContent('');
+  async function handlePost() {
+    if (!title.trim() || !content.trim() || !targetCohortId) return;
+    setActionError(null);
+    try {
+      await apiRequest<{ announcement: ApiAnnouncement }>('/api/v1/announcements', {
+        method: 'POST',
+        body: JSON.stringify({ title, content, cohortId: targetCohortId }),
+      });
+      await refresh();
+      setShowModal(false);
+      setTitle('');
+      setContent('');
+    } catch (requestError) {
+      setActionError(requestError instanceof Error ? requestError.message : 'Could not post announcement');
+    }
   }
 
   return (
@@ -57,6 +83,9 @@ export function Announcements() {
         )}
       </div>
 
+      {actionError && <p className="mb-4 text-sm text-red-700" role="alert">{actionError}</p>}
+      {error && <p className="mb-4 text-sm text-red-700" role="alert">{error}</p>}
+
       {/* Search */}
       <div className="relative mb-5 max-w-sm">
         <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -69,7 +98,9 @@ export function Announcements() {
         />
       </div>
 
-      <div className="space-y-4">
+      {isLoading ? (
+        <Card className="py-12 text-center"><p role="status" className="text-sm text-slate-500">Loading announcements…</p></Card>
+      ) : <div className="space-y-4">
         {filtered.map(a => (
           <Card key={a.id} className="hover:shadow-md transition-shadow">
             <div className="flex items-start gap-3">
@@ -79,20 +110,20 @@ export function Announcements() {
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-start gap-2 mb-1">
                   <h3 className="text-base font-semibold text-slate-900">{a.title}</h3>
-                  {a.targetCohortId && (
+                  {a.cohort && (
                     <Badge variant="info" size="sm">
-                      {COHORTS.find(c => c.id === a.targetCohortId)?.code || 'Cohort'}
+                      {a.cohort.code}
                     </Badge>
                   )}
-                  {a.targetCourseId && (
+                  {a.offering && (
                     <Badge variant="default" size="sm">
-                      {COURSES.find(c => c.id === a.targetCourseId)?.code || 'Course'}
+                      {a.offering.course.code}
                     </Badge>
                   )}
                 </div>
                 <p className="text-sm text-slate-600 leading-relaxed">{a.content}</p>
                 <div className="flex items-center gap-3 mt-3 text-xs text-slate-400">
-                  <span className="font-medium text-slate-600">{a.author.name}</span>
+                  <span className="font-medium text-slate-600">{a.author.fullName}</span>
                   <span>·</span>
                   <span>{formatDate(a.createdAt)}</span>
                 </div>
@@ -107,7 +138,7 @@ export function Announcements() {
             <p className="text-slate-500 text-sm">No announcements found</p>
           </Card>
         )}
-      </div>
+      </div>}
 
       {/* Post announcement modal */}
       <Modal
@@ -118,7 +149,7 @@ export function Announcements() {
         footer={
           <>
             <Button variant="outline" size="sm" onClick={() => setShowModal(false)}>Cancel</Button>
-            <Button size="sm" onClick={handlePost} disabled={!title.trim() || !content.trim()}>Post Announcement</Button>
+            <Button size="sm" onClick={() => { void handlePost(); }} disabled={!title.trim() || !content.trim() || !targetCohortId}>Post Announcement</Button>
           </>
         }
       >
@@ -134,10 +165,12 @@ export function Announcements() {
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3b6fd4] resize-none"
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Select label="Target Cohort (optional)" value="" onChange={() => {}} options={[{ value: '', label: 'All cohorts' }, ...COHORTS.map(c => ({ value: c.id, label: c.code }))]} />
-            <Select label="Target Course (optional)" value="" onChange={() => {}} options={[{ value: '', label: 'All courses' }, ...COURSES.map(c => ({ value: c.id, label: c.code }))]} />
-          </div>
+          <Select
+            label="Target Cohort"
+            value={targetCohortId}
+            onChange={event => setTargetCohortId(event.target.value)}
+            options={[{ value: '', label: 'Choose a cohort' }, ...cohorts.map(cohort => ({ value: cohort.id, label: cohort.code }))]}
+          />
         </div>
       </Modal>
     </Layout>

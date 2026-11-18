@@ -1,24 +1,57 @@
+# Dependencies
 node_modules/
+.pnp
+.pnp.js
+
+# Environment variables
+.env
+.env.*
+!.env.example
+coverage/
+
+# Build outputs
+.next/
+out/
 dist/
 build/
 .cache/
-.env*
-.vite/
-vite.config.*.timestamp-*
 *.tsbuildinfo
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 *-debug.log*
 logs/
 *.log
-.claude-replay.*
-.tmp-*
-/.figma/design-context/
 
-# Platform-managed agentplat state, not project source. In the
-# client-initiated single-repo workspace layout (make's `Path: "."` spec) the
-# repo root IS the workspace root, so these land inside this repo rather than
-# beside it.
+# Editor & OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Database & local storage
+.postgres-data/
+*.sqlite
+*.sqlite3
+*.db
+.timy-local-storage/
+
+# Temporary & cache
+.cache/
+tmp/
+scratch/
+.tmp-*
+.claude-replay.*
+.vite/
+vite.config.*.timestamp-*
+
+# Figma Make & platform-managed state
+/.figma/design-context/
 /.plugins/
 /.opencode-skills/
-
-.next/
-

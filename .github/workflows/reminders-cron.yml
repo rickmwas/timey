@@ -1,0 +1,17 @@
+name: Class Countdown Reminders Cron
+
+on:
+  schedule:
+    # Runs every 5 minutes (UTC) to trigger 30m and 10m class alarms
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  trigger-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Timy Class Reminders Endpoint
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X GET "https://timey.terraseptsolutions.com/api/v1/cron/class-reminders" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          echo "Endpoint responded with HTTP $STATUS"

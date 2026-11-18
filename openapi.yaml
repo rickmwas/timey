@@ -1,0 +1,423 @@
+openapi: 3.0.3
+info:
+  title: Timy API
+  version: 0.1.0
+  description: Timetable, venue, import, announcement, notification, and identity APIs.
+servers:
+  - url: /api/v1
+paths:
+  /api/health:
+    get:
+      servers:
+        - url: /
+      summary: Check application and database readiness
+      responses:
+        '200':
+          description: Database ready
+        '503':
+          description: Database unavailable
+  /auth/login:
+    post:
+      summary: Authenticate by email or institutional identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, password]
+              properties:
+                identifier: { type: string }
+                password: { type: string, format: password }
+      responses:
+        '200': { description: Session cookies set }
+        '401': { description: Invalid credentials }
+        '429': { description: Rate limited }
+  /auth/refresh:
+    post:
+      summary: Rotate the current refresh session
+      responses:
+        '200': { description: Session rotated }
+        '401': { description: Invalid session }
+  /auth/logout:
+    post:
+      security: [{ CookieAuth: [] }]
+      summary: Revoke the current session
+      responses:
+        '200': { description: Session revoked }
+  /auth/me:
+    get:
+      security: [{ CookieAuth: [] }]
+      summary: Read the current user profile
+      responses:
+        '200': { description: Current user profile }
+  /auth/password:
+    patch:
+      security: [{ CookieAuth: [] }]
+      summary: Change the current user's password
+      responses:
+        '200': { description: Password changed }
+        '401': { description: Current password incorrect }
+  /admin/users:
+    get:
+      security: [{ CookieAuth: [] }]
+      summary: List users
+      responses:
+        '200': { description: Paginated user list }
+        '403': { description: Administrator required }
+    post:
+      security: [{ CookieAuth: [] }]
+      summary: Provision a user
+      responses:
+        '201': { description: User created }
+        '403': { description: Administrator required }
+  /admin/users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    patch:
+      security: [{ CookieAuth: [] }]
+      summary: Update a provisioned user
+      responses:
+        '200': { description: User updated }
+        '403': { description: Administrator required }
+  /admin/users/{id}/deactivate:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      security: [{ CookieAuth: [] }]
+      summary: Deactivate a user and revoke sessions
+      responses:
+        '200': { description: User deactivated }
+        '403': { description: Administrator required }
+  /admin/audit-logs:
+    get:
+      security: [{ CookieAuth: [] }]
+      summary: List audit events
+      responses:
+        '200': { description: Paginated audit log }
+        '403': { description: Administrator required }
+  /timetables/me:
+    get:
+      security: [{ CookieAuth: [] }]
+      summary: Read the current student's or lecturer's effective timetable
+      parameters:
+        - $ref: '#/components/parameters/StartDate'
+        - $ref: '#/components/parameters/EndDate'
+      responses:
+        '200': { description: Effective timetable occurrences }
+        '403': { description: Personal timetable role required }
+  /timetables/validate-slot:
+    post:
+      security: [{ CookieAuth: [] }]
+      summary: Check a proposed slot for conflicts
+      responses:
+        '200': { description: Conflict validation result }
+        '403': { description: Timetable write permission required }
+  /timetable-entries:
+    get:
+      security: [{ CookieAuth: [] }]
+      summary: List scoped effective timetable occurrences
+      parameters:
+        - $ref: '#/components/parameters/StartDate'
+        - $ref: '#/components/parameters/EndDate'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: Paginated timetable occurrences }
+  /timetable-entries/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      security: [{ CookieAuth: [] }]
+      summary: Read one entry's effective occurrences
+      parameters:
+        - $ref: '#/components/parameters/StartDate'
+        - $ref: '#/components/parameters/EndDate'
+      responses:
+        '200': { description: Scoped effective occurrences }
+        '404': { description: Entry not found }
+  /timetable-entries/{id}/reschedule:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      security: [{ CookieAuth: [] }]
+      summary: Reschedule one occurrence
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScheduleMutation' }
+      responses:
+        '200': { description: Reschedule, history, and notifications saved }
+        '409': { description: Version mismatch or conflict }
+  /timetable-entries/{id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      security: [{ CookieAuth: [] }]
+      summary: Cancel one occurrence
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScheduleMutation' }
+      responses:
+        '200': { description: Cancellation, history, and notifications saved }
+        '409': { description: Version mismatch }
+  /timetable-entries/{id}/postpone:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      security: [{ CookieAuth: [] }]
+      summary: Postpone one occurrence
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScheduleMutation' }
+      responses:
+        '200': { description: Postponement, history, and notifications saved }
+        '409': { description: Version mismatch or conflict }
+  /venues:
+    get:
+      security: [{ CookieAuth: [] }]
+      summary: List venues
+      responses:
+        '200': { description: Paginated venue list }
+    post:
+      security: [{ CookieAuth: [] }]
+      summary: Create a venue
+      responses:
+        '201': { description: Venue created }
+        '403': { description: Timetable officer or administrator required }
+  /venues/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    patch:
+      security: [{ CookieAuth: [] }]
+      summary: Update venue details or maintenance status
+      responses:
+        '200': { description: Venue updated }
+    delete:
+      security: [{ CookieAuth: [] }]
+      summary: Deactivate a venue
+      responses:
+        '200': { description: Venue deactivated }
+  /venues/availability:
+    get:
+      security: [{ CookieAuth: [] }]
+      summary: Find available venues for a time slice
+      parameters:
+        - in: query
+          name: dayOfWeek
+          required: true
+          schema: { type: string, enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY] }
+        - in: query
+          name: startTime
+          required: true
+          schema: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
+        - in: query
+          name: endTime
+          required: true
+          schema: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
+        - in: query
+          name: minCapacity
+          schema: { type: integer, minimum: 0 }
+        - in: query
+          name: building
+          schema: { type: string }
+      responses:
+        '200': { description: Available and occupied venues, excluding maintenance rooms }
+  /imports:
+    get:
+      security: [{ CookieAuth: [] }]
+      summary: List imports
+      responses:
+        '200': { description: Paginated import jobs }
+    post:
+      security: [{ CookieAuth: [] }]
+      summary: Upload and stage a CSV or XLSX timetable
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [periodId, file]
+              properties:
+                periodId: { type: string, format: uuid }
+                file: { type: string, format: binary }
+      responses:
+        '201': { description: Import uploaded and staged }
+        '409': { description: Duplicate checksum }
+        '413': { description: File exceeds 10 MB }
+  /imports/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      security: [{ CookieAuth: [] }]
+      summary: Read an import and its staged rows
+      responses:
+        '200': { description: Import job detail }
+  /imports/{id}/rows/{rowId}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+      - name: rowId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      security: [{ CookieAuth: [] }]
+      summary: Correct a staged row with expectedVersion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExpectedVersion' }
+      responses:
+        '200': { description: Row corrected }
+        '409': { description: Version mismatch }
+  /imports/{id}/validate:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      security: [{ CookieAuth: [] }]
+      summary: Resolve staged rows and check conflicts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExpectedVersion' }
+      responses:
+        '200': { description: Validation results }
+  /imports/{id}/publish:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      security: [{ CookieAuth: [] }]
+      summary: Atomically publish a validated timetable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExpectedVersion' }
+      responses:
+        '200': { description: Timetable published and target students notified }
+        '409': { description: Version, status, or conflict failure }
+  /imports/{id}/discard:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      security: [{ CookieAuth: [] }]
+      summary: Discard an import and remove its stored file
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExpectedVersion' }
+      responses:
+        '200': { description: Import discarded }
+  /notifications:
+    get:
+      security: [{ CookieAuth: [] }]
+      summary: List the current user's notifications and unread count
+      responses:
+        '200': { description: Recipient-scoped feed }
+  /notifications/{id}/read:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    patch:
+      security: [{ CookieAuth: [] }]
+      summary: Mark one owned notification as read
+      responses:
+        '200': { description: Notification marked read }
+        '404': { description: Notification not found for current user }
+  /notifications/mark-all-read:
+    post:
+      security: [{ CookieAuth: [] }]
+      summary: Mark all of the current user's notifications as read
+      responses:
+        '200': { description: Updated count }
+  /announcements:
+    get:
+      security: [{ CookieAuth: [] }]
+      summary: List active announcements visible to the current role and cohort
+      responses:
+        '200': { description: Visible non-expired and non-archived announcements }
+    post:
+      security: [{ CookieAuth: [] }]
+      summary: Create a cohort or course-offering announcement
+      responses:
+        '201': { description: Announcement created and target students notified }
+        '403': { description: Publisher or author scope denied }
+  /announcements/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    patch:
+      security: [{ CookieAuth: [] }]
+      summary: Update an announcement within author scope
+      responses:
+        '200': { description: Announcement updated }
+    delete:
+      security: [{ CookieAuth: [] }]
+      summary: Archive an announcement
+      responses:
+        '200': { description: Announcement archived }
+components:
+  securitySchemes:
+    CookieAuth:
+      type: apiKey
+      in: cookie
+      name: timy_access
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    StartDate:
+      name: startDate
+      in: query
+      required: true
+      schema: { type: string, format: date }
+    EndDate:
+      name: endDate
+      in: query
+      required: true
+      schema: { type: string, format: date }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string, format: uuid }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 128 }
+  schemas:
+    ExpectedVersion:
+      type: object
+      required: [expectedVersion]
+      properties:
+        expectedVersion: { type: integer, minimum: 1 }
+    ScheduleMutation:
+      type: object
+      required: [occurrenceDate, expectedVersion, reason]
+      properties:
+        occurrenceDate: { type: string, format: date }
+        replacementDate: { type: string, format: date }
+        expectedVersion: { type: integer, minimum: 1 }
+        startTime: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
+        endTime: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
+        venueId: { type: string, format: uuid }
+        reason: { type: string, minLength: 1, maxLength: 1000 }

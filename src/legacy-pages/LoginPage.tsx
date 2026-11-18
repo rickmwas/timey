@@ -6,7 +6,6 @@ import { Eye, EyeOff, ClipboardList, Calendar, MapPin, AlertTriangle, Bell } fro
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { DEMO_ACCOUNTS } from '../data/mock';
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -28,12 +27,6 @@ export function LoginPage() {
     } else {
       setError(result.error || 'Login failed');
     }
-  }
-
-  function fillDemo(acct: typeof DEMO_ACCOUNTS[0]) {
-    setIdentifier(acct.identifier);
-    setPassword(acct.password);
-    setError('');
   }
 
   const features = [
@@ -157,23 +150,9 @@ export function LoginPage() {
             </form>
           </div>
 
-          {/* Demo accounts */}
-          <div className="mt-6">
-            <p className="text-xs text-slate-500 text-center mb-3 font-medium">DEMO ACCOUNTS</p>
-            <div className="grid grid-cols-2 gap-2">
-              {DEMO_ACCOUNTS.map(acct => (
-                <button
-                  key={acct.identifier}
-                  onClick={() => fillDemo(acct)}
-                  className="p-3 bg-white rounded-lg border border-slate-200 text-left hover:border-[#3b6fd4] hover:bg-blue-50 transition-colors group"
-                >
-                  <p className="text-xs font-semibold text-slate-800 group-hover:text-[#1a2f5c]">{acct.name.split(' ').slice(-1)[0]}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{acct.role.replace('_', ' ')}</p>
-                  <p className="text-xs font-mono text-slate-400 mt-1">{acct.identifier}</p>
-                </button>
-              ))}
-            </div>
-          </div>
+          <p className="mt-5 text-center text-xs text-slate-500">
+            Sign in with the university ID or email linked to your account.
+          </p>
         </div>
       </div>
     </div>

@@ -1,20 +1,31 @@
 "use client";
 
 import { useState } from 'react';
-import { Search, GraduationCap, Plus } from 'lucide-react';
+import { Search, GraduationCap } from 'lucide-react';
 import { Layout } from '../../components/layout/Layout';
 import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { useAuth } from '../../contexts/AuthContext';
-import { COHORTS, DEPARTMENTS, TIMETABLE_ENTRIES } from '../../data/mock';
+import { useApiCollection } from '../../hooks/use-api-collection';
+
+type CatalogDepartment = { id: string; name: string };
+type CatalogCohort = {
+  id: string;
+  code: string;
+  name: string;
+  departmentId: string;
+  department: CatalogDepartment;
+  academicYear: string | null;
+  semester: number | null;
+  expectedSize: number;
+  classCount: number;
+};
 
 export function CohortsPage() {
-  const { user } = useAuth();
-  const canManage = user?.role === 'TIMETABLE_OFFICER' || user?.role === 'ADMIN';
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState('ALL');
+  const { items: cohorts, isLoading, error } = useApiCollection<CatalogCohort>('/api/v1/catalog/cohorts');
+  const { items: departments } = useApiCollection<CatalogDepartment>('/api/v1/catalog/departments');
 
-  const filtered = COHORTS.filter(c => {
+  const filtered = cohorts.filter(c => {
     const matchSearch = !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.code.toLowerCase().includes(search.toLowerCase());
     const matchDept = deptFilter === 'ALL' || c.departmentId === deptFilter;
     return matchSearch && matchDept;
@@ -27,7 +38,6 @@ export function CohortsPage() {
           <h1 className="font-display text-2xl text-slate-900">Cohorts</h1>
           <p className="text-slate-500 text-sm">{filtered.length} cohorts</p>
         </div>
-        {canManage && <Button className="sm:ml-auto"><Plus size={16} /> Add Cohort</Button>}
       </div>
 
       <div className="flex gap-3 mb-5">
@@ -37,13 +47,16 @@ export function CohortsPage() {
         </div>
         <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)} className="px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#3b6fd4]">
           <option value="ALL">All Departments</option>
-          {DEPARTMENTS.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+          {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
       </div>
 
+      {error && <p className="mb-4 text-sm text-red-700" role="alert">{error}</p>}
+      {isLoading ? (
+        <Card className="py-12 text-center"><p role="status" className="text-sm text-slate-500">Loading cohorts…</p></Card>
+      ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map(c => {
-          const timetableCount = TIMETABLE_ENTRIES.filter(e => e.cohortId === c.id).length;
           return (
             <Card key={c.id} className="hover:shadow-md transition-shadow">
               <div className="flex items-start gap-3 mb-3">
@@ -59,7 +72,7 @@ export function CohortsPage() {
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="bg-slate-50 rounded-lg p-2">
                   <p className="text-slate-500">Academic Year</p>
-                  <p className="font-medium text-slate-800 mt-0.5">{c.academicYear}</p>
+                  <p className="font-medium text-slate-800 mt-0.5">{c.academicYear ?? 'Not assigned'}</p>
                 </div>
                 <div className="bg-slate-50 rounded-lg p-2">
                   <p className="text-slate-500">Expected Size</p>
@@ -67,17 +80,18 @@ export function CohortsPage() {
                 </div>
                 <div className="bg-slate-50 rounded-lg p-2">
                   <p className="text-slate-500">Semester</p>
-                  <p className="font-medium text-slate-800 mt-0.5">{c.semester}</p>
+                  <p className="font-medium text-slate-800 mt-0.5">{c.semester ?? 'Not assigned'}</p>
                 </div>
                 <div className="bg-slate-50 rounded-lg p-2">
                   <p className="text-slate-500">Classes</p>
-                  <p className="font-medium text-slate-800 mt-0.5">{timetableCount}/week</p>
+                  <p className="font-medium text-slate-800 mt-0.5">{c.classCount}</p>
                 </div>
               </div>
             </Card>
           );
         })}
       </div>
+      )}
     </Layout>
   );
 }

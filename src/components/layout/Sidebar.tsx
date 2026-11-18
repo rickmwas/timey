@@ -25,6 +25,7 @@ const studentNav: NavItem[] = [
   { to: '/venues', icon: <MapPin size={18} />, label: 'Venues' },
   { to: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
   { to: '/notifications', icon: <Bell size={18} />, label: 'Notifications', badge: 2 },
+  { to: '/settings', icon: <Settings size={18} />, label: 'Settings' },
 ];
 
 const lecturerNav: NavItem[] = [
@@ -34,6 +35,7 @@ const lecturerNav: NavItem[] = [
   { to: '/venues', icon: <MapPin size={18} />, label: 'Venues' },
   { to: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
   { to: '/notifications', icon: <Bell size={18} />, label: 'Notifications', badge: 1 },
+  { to: '/settings', icon: <Settings size={18} />, label: 'Settings' },
 ];
 
 const officerNav: NavItem[] = [
@@ -48,6 +50,7 @@ const officerNav: NavItem[] = [
   { to: '/departments', icon: <Building2 size={18} />, label: 'Departments' },
   { to: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
   { to: '/notifications', icon: <Bell size={18} />, label: 'Notifications' },
+  { to: '/settings', icon: <Settings size={18} />, label: 'Settings' },
 ];
 
 const adminNav: NavItem[] = [

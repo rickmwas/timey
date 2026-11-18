@@ -1,18 +1,22 @@
 "use client";
 
-import { useState } from 'react';
-import { Search, Plus, Filter, Edit, Trash2, RefreshCw, MapPin, XCircle } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Search, Plus, Filter, Edit, Trash2, RefreshCw, MapPin, XCircle, WifiOff } from 'lucide-react';
 import { Layout } from '../../components/layout/Layout';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Input, Select } from '../../components/ui/Input';
 import { TimetableStatusBadge } from '../../components/ui/StatusBadge';
+import { useAuth } from '../../contexts/AuthContext';
+import { apiClient } from '../../lib/api-client';
+import { normalizeTimetableEntry } from '../../hooks/use-timetable';
 import { TIMETABLE_ENTRIES, COURSES, VENUES, COHORTS } from '../../data/mock';
 import { DAY_LABELS, formatTime, DAY_ORDER } from '../../lib/utils';
 import type { TimetableEntry, Day } from '../../types';
 
 export function TimetableManagement() {
+  const { mode } = useAuth();
   const [entries, setEntries] = useState<TimetableEntry[]>(TIMETABLE_ENTRIES);
   const [search, setSearch] = useState('');
   const [dayFilter, setDayFilter] = useState('ALL');
@@ -28,6 +32,29 @@ export function TimetableManagement() {
   const [newDay, setNewDay] = useState<Day>('MONDAY');
   const [newStartTime, setNewStartTime] = useState('');
   const [newEndTime, setNewEndTime] = useState('');
+  const [isOffline, setIsOffline] = useState(false);
+
+  const fetchEntries = useCallback(async () => {
+    if (mode === 'mock') {
+      setEntries(TIMETABLE_ENTRIES);
+      return;
+    }
+    try {
+      const res = await apiClient.timetableEntries.list();
+      if (res && Array.isArray(res.items)) {
+        const mapped = res.items.map(normalizeTimetableEntry);
+        setEntries(mapped.length > 0 ? mapped : TIMETABLE_ENTRIES);
+        setIsOffline(false);
+      }
+    } catch {
+      setIsOffline(true);
+      setEntries(TIMETABLE_ENTRIES);
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    fetchEntries();
+  }, [fetchEntries]);
 
   const filtered = entries.filter(e => {
     const matchSearch = !search ||
@@ -42,37 +69,84 @@ export function TimetableManagement() {
     return matchSearch && matchDay && matchStatus && matchCohort;
   }).sort((a, b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day) || a.startTime.localeCompare(b.startTime));
 
-  function handleCancel() {
+  async function handleCancel() {
     if (!selectedEntry || !cancelReason.trim()) return;
-    setEntries(prev => prev.map(e => e.id === selectedEntry.id
+    const entryId = selectedEntry.id;
+    setEntries(prev => prev.map(e => e.id === entryId
       ? { ...e, status: 'CANCELLED' as const, cancellationReason: cancelReason }
       : e
     ));
     setShowCancelModal(false);
-    setCancelReason('');
     setSelectedEntry(null);
+
+    if (mode !== 'mock' && !isOffline) {
+      try {
+        await apiClient.timetableEntries.cancel(entryId, {
+          occurrenceDate: new Date().toISOString().slice(0, 10),
+          reason: cancelReason,
+        });
+      } catch (e) {
+        console.warn('Failed to submit cancellation to API:', e);
+      }
+    }
+    setCancelReason('');
   }
 
-  function handleMoveVenue() {
+  async function handleMoveVenue() {
     if (!selectedEntry || !newVenueId) return;
-    const venue = VENUES.find(v => v.id === newVenueId)!;
-    setEntries(prev => prev.map(e => e.id === selectedEntry.id
+    const entryId = selectedEntry.id;
+    const venue = VENUES.find(v => v.id === newVenueId) || {
+      id: newVenueId,
+      code: 'NEW-VEN',
+      name: 'New Venue',
+      building: 'Academic Block',
+      floor: 'Floor 1',
+      capacity: 50,
+      active: true,
+      aliases: [],
+    };
+    setEntries(prev => prev.map(e => e.id === entryId
       ? { ...e, status: 'MOVED' as const, rescheduledVenueId: newVenueId, rescheduledVenue: venue, reschedulingReason: 'Venue change by timetable officer' }
       : e
     ));
     setShowMoveVenueModal(false);
     setSelectedEntry(null);
+
+    if (mode !== 'mock' && !isOffline) {
+      try {
+        await apiClient.timetableEntries.update(entryId, {
+          venueId: newVenueId,
+        });
+      } catch (e) {
+        console.warn('Failed to update venue on API:', e);
+      }
+    }
     setNewVenueId('');
   }
 
-  function handleReschedule() {
+  async function handleReschedule() {
     if (!selectedEntry || !newDay || !newStartTime || !newEndTime) return;
-    setEntries(prev => prev.map(e => e.id === selectedEntry.id
+    const entryId = selectedEntry.id;
+    setEntries(prev => prev.map(e => e.id === entryId
       ? { ...e, status: 'RESCHEDULED' as const, rescheduledDay: newDay, rescheduledStartTime: newStartTime, rescheduledEndTime: newEndTime, reschedulingReason: 'Rescheduled by timetable officer' }
       : e
     ));
     setShowRescheduleModal(false);
     setSelectedEntry(null);
+
+    if (mode !== 'mock' && !isOffline) {
+      try {
+        await apiClient.timetableEntries.reschedule(entryId, {
+          occurrenceDate: new Date().toISOString().slice(0, 10),
+          replacementDay: newDay,
+          replacementStartTime: newStartTime,
+          replacementEndTime: newEndTime,
+          reason: 'Rescheduled by timetable officer',
+        });
+      } catch (e) {
+        console.warn('Failed to reschedule on API:', e);
+      }
+    }
     setNewStartTime('');
     setNewEndTime('');
   }
@@ -104,6 +178,12 @@ export function TimetableManagement() {
 
   return (
     <Layout breadcrumb={[{ label: 'Dashboard', to: '/dashboard' }, { label: 'Timetable Management' }]}>
+      {isOffline && (
+        <div className="bg-amber-50 text-amber-900 text-xs px-3.5 py-2.5 rounded-xl flex items-center gap-2 border border-amber-200 mb-5 shadow-sm">
+          <WifiOff size={15} className="text-amber-600 flex-shrink-0" />
+          <span>Working in offline view. Timetable adjustments are persisted in local view.</span>
+        </div>
+      )}
       <div className="mb-5 flex flex-col sm:flex-row sm:items-center gap-3">
         <div>
           <h1 className="font-display text-2xl text-slate-900">Timetable Management</h1>

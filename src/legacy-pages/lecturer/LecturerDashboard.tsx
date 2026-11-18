@@ -1,43 +1,59 @@
 "use client";
 
 import { useState } from 'react';
-import { Clock, BookOpen, MapPin, Users, Calendar } from 'lucide-react';
+import { Clock, BookOpen, MapPin, Users, Calendar, WifiOff } from 'lucide-react';
 import { Layout } from '../../components/layout/Layout';
 import { Card, StatCard } from '../../components/ui/Card';
 import { TimetableCard } from '../../components/timetable/TimetableCard';
-import { TimetableStatusBadge } from '../../components/ui/StatusBadge';
 import { useAuth } from '../../contexts/AuthContext';
-import { TIMETABLE_ENTRIES, NOTIFICATIONS, ANNOUNCEMENTS } from '../../data/mock';
-import { getTodayDay, DAY_LABELS, DAY_ORDER, formatTime, timeAgo } from '../../lib/utils';
+import { useTimetable } from '../../hooks/use-timetable';
+import { useNotifications } from '../../hooks/use-notifications';
+import { ANNOUNCEMENTS } from '../../data/mock';
+import { getTodayDay, DAY_LABELS, timeAgo } from '../../lib/utils';
 import type { Day } from '../../types';
 
 export function LecturerDashboard() {
   const { user } = useAuth();
+  const { entries, todayEntries, isLoading, isOffline, lastSyncedAt } = useTimetable();
+  const { notifications } = useNotifications();
   const [selectedDay, setSelectedDay] = useState<Day>(getTodayDay());
   const todayDay = getTodayDay();
 
-  const myEntries = TIMETABLE_ENTRIES.filter(e => e.lecturerId === user?.id);
-  const todayEntries = myEntries.filter(e => e.day === todayDay && e.status !== 'CANCELLED')
-    .sort((a, b) => a.startTime.localeCompare(b.startTime));
+  const myEntries = entries;
 
-  const uniqueCourses = new Set(myEntries.map(e => e.courseId)).size;
-  const uniqueVenues = new Set(myEntries.map(e => e.venueId)).size;
-  const uniqueCohorts = new Set(myEntries.map(e => e.cohortId)).size;
+  const uniqueCourses = new Set(myEntries.map(e => e.courseId || e.course.code)).size;
+  const uniqueVenues = new Set(myEntries.map(e => e.venueId || e.venue.code)).size;
+  const uniqueCohorts = new Set(myEntries.map(e => e.cohortId || e.cohort.code)).size;
 
   const weeklyHours = myEntries.reduce((sum, e) => {
-    const [sh, sm] = e.startTime.split(':').map(Number);
-    const [eh, em] = e.endTime.split(':').map(Number);
+    const [sh, sm] = (e.startTime || "08:00").split(':').map(Number);
+    const [eh, em] = (e.endTime || "10:00").split(':').map(Number);
     return sum + (eh * 60 + em - sh * 60 - sm) / 60;
   }, 0);
 
-  const dayEntries = myEntries.filter(e => e.day === selectedDay)
+  const dayEntries = myEntries
+    .filter(e => {
+      const effectiveDay = e.status === 'RESCHEDULED' && e.rescheduledDay ? e.rescheduledDay : e.day;
+      return effectiveDay === selectedDay;
+    })
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-  const notifications = NOTIFICATIONS.filter(n => n.userId === user?.id);
   const weekdays: Day[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'];
 
   return (
     <Layout breadcrumb={[{ label: 'Dashboard' }]}>
+      {/* Ambient Offline Banner */}
+      {isOffline && (
+        <div className="bg-amber-50 text-amber-900 text-xs px-3.5 py-2.5 rounded-xl flex items-center gap-2 border border-amber-200 mb-5 shadow-sm">
+          <WifiOff size={15} className="text-amber-600 flex-shrink-0" />
+          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse flex-shrink-0" />
+          <span>
+            Working offline. Displaying cached teaching schedule{' '}
+            {lastSyncedAt ? `(synced ${timeAgo(lastSyncedAt.toISOString())})` : ''} · Campus updates will sync automatically once reconnected.
+          </span>
+        </div>
+      )}
+
       <div className="mb-6">
         <h1 className="font-display text-2xl text-slate-900">
           {new Date().getHours() < 12 ? 'Good morning' : 'Good afternoon'},{' '}
@@ -75,7 +91,11 @@ export function LecturerDashboard() {
           </div>
 
           <div className="space-y-3">
-            {dayEntries.length === 0 ? (
+            {isLoading && myEntries.length === 0 ? (
+              <Card className="text-center py-10">
+                <p className="text-slate-400 text-sm animate-pulse">Loading teaching schedule...</p>
+              </Card>
+            ) : dayEntries.length === 0 ? (
               <Card className="text-center py-10">
                 <p className="text-slate-400 text-sm">No classes on {DAY_LABELS[selectedDay]}</p>
               </Card>
@@ -129,10 +149,10 @@ export function LecturerDashboard() {
               <MapPin size={14} /> Assigned Venues
             </h3>
             <div className="space-y-2">
-              {[...new Set(myEntries.map(e => e.venue.id))].map(vid => {
-                const e = myEntries.find(x => x.venue.id === vid)!;
+              {[...new Set(myEntries.map(e => e.venue.code))].map(vcode => {
+                const e = myEntries.find(x => x.venue.code === vcode)!;
                 return (
-                  <div key={vid} className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg">
+                  <div key={vcode} className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg">
                     <MapPin size={13} className="text-slate-400 flex-shrink-0" />
                     <div>
                       <p className="text-sm font-medium text-slate-800">{e.venue.code}</p>
