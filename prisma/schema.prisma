@@ -222,6 +222,7 @@ model User {
   createdOverrides      ScheduleOverride[] @relation("OverrideCreator")
   scheduleChanges       ScheduleChange[]   @relation("ChangeActor")
   auditLogs             AuditLog[]         @relation("AuditActor")
+  pushSubscriptions     PushSubscription[]
 
   @@index([role, status])
   @@index([cohortId, role, status])
@@ -434,4 +435,18 @@ model Announcement {
 
   @@index([cohortId, archivedAt, expiresAt, createdAt])
   @@index([offeringId, archivedAt, expiresAt, createdAt])
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

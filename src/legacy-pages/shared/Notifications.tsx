@@ -1,66 +1,46 @@
 "use client";
 
 import { useState } from 'react';
-import { Bell, CheckCheck, Megaphone, MapPin, RefreshCw, X, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
+import { Bell, CheckCheck, Megaphone, MapPin, RefreshCw, X, AlertCircle, Settings } from 'lucide-react';
 import { Layout } from '../../components/layout/Layout';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
+import { useAuth } from '../../contexts/AuthContext';
+import { useNotifications } from '../../hooks/use-notifications';
 import { timeAgo } from '../../lib/utils';
-import type { NotificationType } from '../../types';
-import { useApiCollection } from '../../hooks/use-api-collection';
-import { apiRequest } from '../../lib/api-client';
-import { toNotification, type ApiNotification } from '../../lib/notification-adapter';
+import type { Notification, NotificationType } from '../../types';
 
-const typeConfig: Record<NotificationType, { icon: React.ReactNode; color: string }> = {
+const typeConfig: Record<string, { icon: React.ReactNode; color: string }> = {
   VENUE_SWAP: { icon: <MapPin size={15} />, color: 'text-blue-600 bg-blue-100' },
+  SCHEDULE_RESCHEDULED: { icon: <RefreshCw size={15} />, color: 'text-amber-600 bg-amber-100' },
   CLASS_RESCHEDULED: { icon: <RefreshCw size={15} />, color: 'text-amber-600 bg-amber-100' },
+  SCHEDULE_CANCELLED: { icon: <X size={15} />, color: 'text-red-600 bg-red-100' },
   CLASS_CANCELLED: { icon: <X size={15} />, color: 'text-red-600 bg-red-100' },
+  SCHEDULE_POSTPONED: { icon: <RefreshCw size={15} />, color: 'text-purple-600 bg-purple-100' },
   ANNOUNCEMENT: { icon: <Megaphone size={15} />, color: 'text-violet-600 bg-violet-100' },
   SYSTEM_ALERT: { icon: <AlertCircle size={15} />, color: 'text-rose-600 bg-rose-100' },
   GENERAL: { icon: <Bell size={15} />, color: 'text-slate-600 bg-slate-100' },
 };
 
-const typeLabels: Record<NotificationType, string> = {
+const typeLabels: Record<string, string> = {
   VENUE_SWAP: 'Venue Change',
+  SCHEDULE_RESCHEDULED: 'Rescheduled',
   CLASS_RESCHEDULED: 'Rescheduled',
+  SCHEDULE_CANCELLED: 'Cancelled',
   CLASS_CANCELLED: 'Cancelled',
+  SCHEDULE_POSTPONED: 'Postponed',
   ANNOUNCEMENT: 'Announcement',
   SYSTEM_ALERT: 'System Alert',
   GENERAL: 'General',
 };
 
 export function Notifications() {
-  const { items, isLoading, error, refresh } = useApiCollection<ApiNotification>("/api/v1/notifications");
-  const [actionError, setActionError] = useState<string | null>(null);
+  const { user } = useAuth();
+  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
-  const notifications = items.map(toNotification);
 
   const displayed = filter === 'unread' ? notifications.filter(n => !n.read) : notifications;
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  async function markAllRead() {
-    setActionError(null);
-    try {
-      await apiRequest<{ updatedCount: number }>("/api/v1/notifications/mark-all-read", {
-        method: "POST",
-      });
-      await refresh();
-    } catch (requestError) {
-      setActionError(requestError instanceof Error ? requestError.message : "Could not update notifications");
-    }
-  }
-
-  async function markRead(id: string) {
-    setActionError(null);
-    try {
-      await apiRequest<{ id: string; changed: boolean }>(`/api/v1/notifications/${id}/read`, {
-        method: "PATCH",
-      });
-      await refresh();
-    } catch (requestError) {
-      setActionError(requestError instanceof Error ? requestError.message : "Could not update notification");
-    }
-  }
 
   return (
     <Layout breadcrumb={[{ label: 'Notifications' }]}>
@@ -69,15 +49,20 @@ export function Notifications() {
           <h1 className="font-display text-2xl text-slate-900">Notifications</h1>
           <p className="text-slate-500 text-sm">{unreadCount} unread · {notifications.length} total</p>
         </div>
-        {unreadCount > 0 && (
-          <Button variant="outline" size="sm" className="sm:ml-auto" onClick={markAllRead}>
-            <CheckCheck size={15} /> Mark all as read
-          </Button>
-        )}
+        <div className="flex items-center gap-2 sm:ml-auto">
+          {unreadCount > 0 && (
+            <Button variant="outline" size="sm" onClick={markAllAsRead}>
+              <CheckCheck size={15} /> Mark all as read
+            </Button>
+          )}
+          <Link href="/settings">
+            <Button variant="outline" size="sm" title="Alert & Push Settings">
+              <Settings size={15} />
+              <span className="hidden sm:inline">Settings</span>
+            </Button>
+          </Link>
+        </div>
       </div>
-
-      {actionError && <p className="mb-4 text-sm text-red-700" role="alert">{actionError}</p>}
-      {error && <p className="mb-4 text-sm text-red-700" role="alert">{error}</p>}
 
       {/* Filter tabs */}
       <div className="flex gap-1 mb-5 bg-slate-100 p-1 rounded-lg w-fit">
@@ -92,9 +77,7 @@ export function Notifications() {
         ))}
       </div>
 
-      {isLoading ? (
-        <Card className="text-center py-12"><p role="status" className="text-sm text-slate-500">Loading notifications…</p></Card>
-      ) : displayed.length === 0 ? (
+      {displayed.length === 0 ? (
         <Card className="text-center py-12">
           <Bell size={32} className="mx-auto text-slate-300 mb-3" />
           <p className="text-slate-500 text-sm">No {filter === 'unread' ? 'unread ' : ''}notifications</p>
@@ -107,7 +90,7 @@ export function Notifications() {
               <Card
                 key={n.id}
                 className={`cursor-pointer hover:shadow-md transition-all ${!n.read ? 'border-l-4 border-l-[#3b6fd4]' : ''}`}
-                onClick={() => { if (!n.read) void markRead(n.id); }}
+                onClick={() => markAsRead(n.id)}
               >
                 <div className="flex items-start gap-3">
                   <div className={`p-2 rounded-lg flex-shrink-0 ${config.color}`}>

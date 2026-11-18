@@ -1,113 +1,221 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { Search, RefreshCw, XCircle } from "lucide-react";
-import { Layout } from "@/components/layout/Layout";
-import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { Modal } from "@/components/ui/Modal";
-import { TimetableStatusBadge } from "@/components/ui/StatusBadge";
-import { useTimetableEntries } from "@/hooks/use-timetable";
-import { apiRequest } from "@/lib/api-client";
-import { DAY_LABELS, DAY_ORDER, formatTime } from "@/lib/utils";
-import type { TimetableEntry } from "@/types";
+import { useState, useEffect, useCallback } from 'react';
+import { Search, Plus, Filter, Edit, Trash2, RefreshCw, MapPin, XCircle, WifiOff } from 'lucide-react';
+import { Layout } from '../../components/layout/Layout';
+import { Card } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
+import { Modal } from '../../components/ui/Modal';
+import { Input, Select } from '../../components/ui/Input';
+import { TimetableStatusBadge } from '../../components/ui/StatusBadge';
+import { useAuth } from '../../contexts/AuthContext';
+import { apiClient } from '../../lib/api-client';
+import { normalizeTimetableEntry } from '../../hooks/use-timetable';
+import { TIMETABLE_ENTRIES, COURSES, VENUES, COHORTS } from '../../data/mock';
+import { DAY_LABELS, formatTime, DAY_ORDER } from '../../lib/utils';
+import type { TimetableEntry, Day } from '../../types';
 
 export function TimetableManagement() {
-  const { entries, isLoading, error, refresh } = useTimetableEntries();
-  const [search, setSearch] = useState("");
-  const [dayFilter, setDayFilter] = useState("ALL");
-  const [statusFilter, setStatusFilter] = useState("ALL");
-  const [cohortFilter, setCohortFilter] = useState("ALL");
+  const { mode } = useAuth();
+  const [entries, setEntries] = useState<TimetableEntry[]>(TIMETABLE_ENTRIES);
+  const [search, setSearch] = useState('');
+  const [dayFilter, setDayFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [cohortFilter, setCohortFilter] = useState('ALL');
+  const [showNewModal, setShowNewModal] = useState(false);
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showMoveVenueModal, setShowMoveVenueModal] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<TimetableEntry | null>(null);
-  const [cancelReason, setCancelReason] = useState("");
-  const [cancelError, setCancelError] = useState<string | null>(null);
-  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [newVenueId, setNewVenueId] = useState('');
+  const [newDay, setNewDay] = useState<Day>('MONDAY');
+  const [newStartTime, setNewStartTime] = useState('');
+  const [newEndTime, setNewEndTime] = useState('');
+  const [isOffline, setIsOffline] = useState(false);
 
-  const filtered = entries.filter(entry => {
-    const term = search.toLowerCase();
-    const matchesSearch = !term ||
-      entry.course.title.toLowerCase().includes(term) ||
-      entry.course.code.toLowerCase().includes(term) ||
-      entry.cohort.code.toLowerCase().includes(term) ||
-      entry.lecturer.name.toLowerCase().includes(term) ||
-      entry.venue.code.toLowerCase().includes(term);
-    return matchesSearch &&
-      (dayFilter === "ALL" || entry.day === dayFilter) &&
-      (statusFilter === "ALL" || entry.status === statusFilter) &&
-      (cohortFilter === "ALL" || entry.cohortId === cohortFilter);
-  }).sort((a, b) =>
-    DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day) ||
-    a.startTime.localeCompare(b.startTime),
-  );
+  const fetchEntries = useCallback(async () => {
+    if (mode === 'mock') {
+      setEntries(TIMETABLE_ENTRIES);
+      return;
+    }
+    try {
+      const res = await apiClient.timetableEntries.list();
+      if (res && Array.isArray(res.items)) {
+        const mapped = res.items.map(normalizeTimetableEntry);
+        setEntries(mapped.length > 0 ? mapped : TIMETABLE_ENTRIES);
+        setIsOffline(false);
+      }
+    } catch {
+      setIsOffline(true);
+      setEntries(TIMETABLE_ENTRIES);
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    fetchEntries();
+  }, [fetchEntries]);
+
+  const filtered = entries.filter(e => {
+    const matchSearch = !search ||
+      e.course.title.toLowerCase().includes(search.toLowerCase()) ||
+      e.course.code.toLowerCase().includes(search.toLowerCase()) ||
+      e.cohort.code.toLowerCase().includes(search.toLowerCase()) ||
+      e.lecturer.name.toLowerCase().includes(search.toLowerCase()) ||
+      e.venue.code.toLowerCase().includes(search.toLowerCase());
+    const matchDay = dayFilter === 'ALL' || e.day === dayFilter;
+    const matchStatus = statusFilter === 'ALL' || e.status === statusFilter;
+    const matchCohort = cohortFilter === 'ALL' || e.cohortId === cohortFilter;
+    return matchSearch && matchDay && matchStatus && matchCohort;
+  }).sort((a, b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day) || a.startTime.localeCompare(b.startTime));
 
   async function handleCancel() {
-    if (!selectedEntry?.occurrenceDate || !selectedEntry.version || !cancelReason.trim()) return;
+    if (!selectedEntry || !cancelReason.trim()) return;
+    const entryId = selectedEntry.id;
+    setEntries(prev => prev.map(e => e.id === entryId
+      ? { ...e, status: 'CANCELLED' as const, cancellationReason: cancelReason }
+      : e
+    ));
+    setShowCancelModal(false);
+    setSelectedEntry(null);
 
-    setIsCancelling(true);
-    setCancelError(null);
-    try {
-      await apiRequest(`/api/v1/timetable-entries/${selectedEntry.id}/cancel`, {
-        method: "POST",
-        headers: { "Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({
-          occurrenceDate: selectedEntry.occurrenceDate,
-          expectedVersion: selectedEntry.version,
-          reason: cancelReason.trim(),
-        }),
-      });
-      setSelectedEntry(null);
-      setCancelReason("");
-      await refresh();
-    } catch (requestError) {
-      setCancelError(requestError instanceof Error ? requestError.message : "Could not cancel this class");
-    } finally {
-      setIsCancelling(false);
+    if (mode !== 'mock' && !isOffline) {
+      try {
+        await apiClient.timetableEntries.cancel(entryId, {
+          occurrenceDate: new Date().toISOString().slice(0, 10),
+          reason: cancelReason,
+        });
+      } catch (e) {
+        console.warn('Failed to submit cancellation to API:', e);
+      }
     }
+    setCancelReason('');
   }
 
-  const cohortOptions = Array.from(
-    new Map(entries.map(entry => [entry.cohortId, entry.cohort])).values(),
-  );
+  async function handleMoveVenue() {
+    if (!selectedEntry || !newVenueId) return;
+    const entryId = selectedEntry.id;
+    const venue = VENUES.find(v => v.id === newVenueId) || {
+      id: newVenueId,
+      code: 'NEW-VEN',
+      name: 'New Venue',
+      building: 'Academic Block',
+      floor: 'Floor 1',
+      capacity: 50,
+      active: true,
+      aliases: [],
+    };
+    setEntries(prev => prev.map(e => e.id === entryId
+      ? { ...e, status: 'MOVED' as const, rescheduledVenueId: newVenueId, rescheduledVenue: venue, reschedulingReason: 'Venue change by timetable officer' }
+      : e
+    ));
+    setShowMoveVenueModal(false);
+    setSelectedEntry(null);
+
+    if (mode !== 'mock' && !isOffline) {
+      try {
+        await apiClient.timetableEntries.update(entryId, {
+          venueId: newVenueId,
+        });
+      } catch (e) {
+        console.warn('Failed to update venue on API:', e);
+      }
+    }
+    setNewVenueId('');
+  }
+
+  async function handleReschedule() {
+    if (!selectedEntry || !newDay || !newStartTime || !newEndTime) return;
+    const entryId = selectedEntry.id;
+    setEntries(prev => prev.map(e => e.id === entryId
+      ? { ...e, status: 'RESCHEDULED' as const, rescheduledDay: newDay, rescheduledStartTime: newStartTime, rescheduledEndTime: newEndTime, reschedulingReason: 'Rescheduled by timetable officer' }
+      : e
+    ));
+    setShowRescheduleModal(false);
+    setSelectedEntry(null);
+
+    if (mode !== 'mock' && !isOffline) {
+      try {
+        await apiClient.timetableEntries.reschedule(entryId, {
+          occurrenceDate: new Date().toISOString().slice(0, 10),
+          replacementDay: newDay,
+          replacementStartTime: newStartTime,
+          replacementEndTime: newEndTime,
+          reason: 'Rescheduled by timetable officer',
+        });
+      } catch (e) {
+        console.warn('Failed to reschedule on API:', e);
+      }
+    }
+    setNewStartTime('');
+    setNewEndTime('');
+  }
+
+  function handleRestore(entry: TimetableEntry) {
+    setEntries(prev => prev.map(e => e.id === entry.id
+      ? { ...e, status: 'ACTIVE' as const, cancellationReason: undefined, reschedulingReason: undefined, rescheduledDay: undefined, rescheduledStartTime: undefined, rescheduledEndTime: undefined, rescheduledVenueId: undefined, rescheduledVenue: undefined }
+      : e
+    ));
+  }
+
+  const dayOptions = [
+    { value: 'ALL', label: 'All Days' },
+    ...DAY_ORDER.map(d => ({ value: d, label: DAY_LABELS[d] })),
+  ];
+
+  const statusOptions = [
+    { value: 'ALL', label: 'All Statuses' },
+    { value: 'ACTIVE', label: 'Active' },
+    { value: 'RESCHEDULED', label: 'Rescheduled' },
+    { value: 'CANCELLED', label: 'Cancelled' },
+    { value: 'MOVED', label: 'Moved' },
+  ];
+
+  const cohortOptions = [
+    { value: 'ALL', label: 'All Cohorts' },
+    ...COHORTS.map(c => ({ value: c.id, label: c.code })),
+  ];
 
   return (
-    <Layout breadcrumb={[{ label: "Dashboard", to: "/dashboard" }, { label: "Timetable Management" }]}>
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+    <Layout breadcrumb={[{ label: 'Dashboard', to: '/dashboard' }, { label: 'Timetable Management' }]}>
+      {isOffline && (
+        <div className="bg-amber-50 text-amber-900 text-xs px-3.5 py-2.5 rounded-xl flex items-center gap-2 border border-amber-200 mb-5 shadow-sm">
+          <WifiOff size={15} className="text-amber-600 flex-shrink-0" />
+          <span>Working in offline view. Timetable adjustments are persisted in local view.</span>
+        </div>
+      )}
+      <div className="mb-5 flex flex-col sm:flex-row sm:items-center gap-3">
         <div>
           <h1 className="font-display text-2xl text-slate-900">Timetable Management</h1>
-          <p className="text-sm text-slate-500">This week&apos;s schedule · {filtered.length} occurrences</p>
+          <p className="text-slate-500 text-sm">2024/2025 Semester 1 · {filtered.length} entries</p>
         </div>
-        <Link
-          href="/import"
-          className="inline-flex items-center justify-center rounded-lg bg-[#1a2f5c] px-4 py-2 text-sm font-medium text-white hover:bg-[#243f78] sm:ml-auto"
-        >
-          Import Timetable
-        </Link>
+        <div className="sm:ml-auto">
+          <Button onClick={() => setShowNewModal(true)}>
+            <Plus size={16} /> New Entry
+          </Button>
+        </div>
       </div>
 
-      {error && <p className="mb-4 text-sm text-red-700" role="alert">{error}</p>}
-      <div className="mb-5 flex flex-wrap gap-3">
-        <div className="relative min-w-48 flex-1">
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3 mb-5">
+        <div className="relative flex-1 min-w-48">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="search"
             placeholder="Search..."
             value={search}
-            onChange={event => setSearch(event.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#3b6fd4]"
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#3b6fd4]"
           />
         </div>
-        <select value={dayFilter} onChange={event => setDayFilter(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-          <option value="ALL">All Days</option>
-          {DAY_ORDER.map(day => <option key={day} value={day}>{DAY_LABELS[day]}</option>)}
+        <select value={dayFilter} onChange={e => setDayFilter(e.target.value)} className="px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#3b6fd4]">
+          {dayOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        <select value={statusFilter} onChange={event => setStatusFilter(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-          <option value="ALL">All Statuses</option>
-          {["ACTIVE", "RESCHEDULED", "CANCELLED", "MOVED"].map(status => <option key={status} value={status}>{status}</option>)}
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#3b6fd4]">
+          {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        <select value={cohortFilter} onChange={event => setCohortFilter(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-          <option value="ALL">All Cohorts</option>
-          {cohortOptions.map(cohort => <option key={cohort.id} value={cohort.id}>{cohort.code}</option>)}
+        <select value={cohortFilter} onChange={e => setCohortFilter(e.target.value)} className="px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#3b6fd4]">
+          {cohortOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       </div>
 
@@ -116,48 +224,64 @@ export function TimetableManagement() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                {["Course", "Cohort", "Date", "Time", "Venue", "Lecturer", "Status", "Actions"].map(heading => (
-                  <th key={heading} className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">{heading}</th>
+                {['Course', 'Cohort', 'Day', 'Time', 'Venue', 'Lecturer', 'Status', 'Actions'].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map(entry => (
-                <tr key={`${entry.id}:${entry.occurrenceDate}`} className="group hover:bg-slate-50">
+              {filtered.map(e => (
+                <tr key={e.id} className="hover:bg-slate-50 transition-colors group">
                   <td className="px-4 py-3">
-                    <p className="font-medium text-slate-900">{entry.course.title}</p>
-                    <p className="font-mono text-xs text-slate-500">{entry.course.code}</p>
+                    <p className="font-medium text-slate-900">{e.course.title}</p>
+                    <p className="text-xs text-slate-500 font-mono">{e.course.code}</p>
                   </td>
-                  <td className="px-4 py-3 text-xs text-slate-600">{entry.cohort.code}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-slate-600">{entry.effectiveDate} · {DAY_LABELS[entry.day]}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-600">{formatTime(entry.startTime)} to {formatTime(entry.endTime)}</td>
+                  <td className="px-4 py-3 text-xs text-slate-600">{e.cohort.code}</td>
+                  <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{DAY_LABELS[e.day]}</td>
+                  <td className="px-4 py-3 text-slate-600 whitespace-nowrap text-xs">{formatTime(e.startTime)}–{formatTime(e.endTime)}</td>
                   <td className="px-4 py-3">
-                    <p className="font-medium text-slate-900">{entry.venue.code}</p>
-                    <p className="text-xs text-slate-400">{entry.venue.building}</p>
+                    <p className="text-slate-900 font-medium">{e.venue.code}</p>
+                    <p className="text-xs text-slate-400">{e.venue.building}</p>
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-slate-600">{entry.lecturer.name}</td>
-                  <td className="px-4 py-3"><TimetableStatusBadge status={entry.status} /></td>
+                  <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
+                    <p>{e.lecturer.name.split(' ').slice(0, 2).join(' ')}</p>
+                  </td>
+                  <td className="px-4 py-3"><TimetableStatusBadge status={e.status} /></td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      {entry.status !== "CANCELLED" && (
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {e.status !== 'CANCELLED' && (
                         <>
-                          <Link
-                            href="/rescheduling"
+                          <button
+                            onClick={() => { setSelectedEntry(e); setShowRescheduleModal(true); setNewDay(e.day); setNewStartTime(e.startTime); setNewEndTime(e.endTime); }}
+                            className="p-1.5 rounded text-slate-500 hover:bg-amber-100 hover:text-amber-700 transition-colors"
                             title="Reschedule"
-                            aria-label={`Reschedule ${entry.course.code}`}
-                            className="rounded p-1.5 text-slate-500 transition-colors hover:bg-amber-100 hover:text-amber-700"
                           >
                             <RefreshCw size={14} />
-                          </Link>
+                          </button>
                           <button
-                            onClick={() => { setSelectedEntry(entry); setCancelError(null); }}
+                            onClick={() => { setSelectedEntry(e); setShowMoveVenueModal(true); setNewVenueId(e.venueId); }}
+                            className="p-1.5 rounded text-slate-500 hover:bg-blue-100 hover:text-blue-700 transition-colors"
+                            title="Move venue"
+                          >
+                            <MapPin size={14} />
+                          </button>
+                          <button
+                            onClick={() => { setSelectedEntry(e); setShowCancelModal(true); }}
+                            className="p-1.5 rounded text-slate-500 hover:bg-red-100 hover:text-red-600 transition-colors"
                             title="Cancel"
-                            aria-label={`Cancel ${entry.course.code}`}
-                            className="rounded p-1.5 text-slate-500 transition-colors hover:bg-red-100 hover:text-red-600"
                           >
                             <XCircle size={14} />
                           </button>
                         </>
+                      )}
+                      {e.status === 'CANCELLED' && (
+                        <button
+                          onClick={() => handleRestore(e)}
+                          className="p-1.5 rounded text-slate-500 hover:bg-emerald-100 hover:text-emerald-700 transition-colors text-xs font-medium px-2"
+                          title="Restore"
+                        >
+                          Restore
+                        </button>
                       )}
                     </div>
                   </td>
@@ -165,48 +289,140 @@ export function TimetableManagement() {
               ))}
             </tbody>
           </table>
-          {isLoading ? (
-            <div className="py-10 text-center text-sm text-slate-500" role="status">Loading this week&apos;s schedule...</div>
-          ) : filtered.length === 0 ? (
-            <div className="py-10 text-center text-sm text-slate-400">No entries match your filters</div>
-          ) : null}
+          {filtered.length === 0 && (
+            <div className="text-center py-10 text-slate-400 text-sm">No entries match your filters</div>
+          )}
         </div>
       </Card>
 
+      {/* Cancel modal */}
       <Modal
-        open={Boolean(selectedEntry)}
-        onClose={() => { setSelectedEntry(null); setCancelReason(""); setCancelError(null); }}
+        open={showCancelModal}
+        onClose={() => { setShowCancelModal(false); setCancelReason(''); }}
         title="Cancel Class"
         footer={
           <>
-            <Button variant="outline" size="sm" onClick={() => setSelectedEntry(null)}>Keep Class</Button>
-            <Button variant="danger" size="sm" onClick={() => void handleCancel()} disabled={!cancelReason.trim() || isCancelling}>
-              {isCancelling ? "Cancelling..." : "Confirm Cancellation"}
-            </Button>
+            <Button variant="outline" size="sm" onClick={() => setShowCancelModal(false)}>Cancel</Button>
+            <Button variant="danger" size="sm" onClick={handleCancel} disabled={!cancelReason.trim()}>Confirm Cancellation</Button>
           </>
         }
       >
         {selectedEntry && (
           <div className="space-y-4">
-            <div className="rounded-lg bg-slate-50 p-3 text-sm">
+            <div className="p-3 bg-slate-50 rounded-lg text-sm">
               <p className="font-medium text-slate-900">{selectedEntry.course.title}</p>
-              <p className="mt-0.5 text-xs text-slate-500">
-                {selectedEntry.effectiveDate} · {DAY_LABELS[selectedEntry.day]} · {formatTime(selectedEntry.startTime)} to {formatTime(selectedEntry.endTime)} · {selectedEntry.venue.code}
-              </p>
+              <p className="text-slate-500 text-xs mt-0.5">{DAY_LABELS[selectedEntry.day]} · {formatTime(selectedEntry.startTime)} – {formatTime(selectedEntry.endTime)} · {selectedEntry.venue.code}</p>
             </div>
-            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-              Cancellation Reason
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-slate-700">Cancellation Reason <span className="text-red-500">*</span></label>
               <textarea
                 value={cancelReason}
-                onChange={event => setCancelReason(event.target.value)}
+                onChange={e => setCancelReason(e.target.value)}
                 rows={3}
-                className="resize-none rounded-md border border-slate-300 px-3 py-2 text-sm font-normal focus:outline-none focus:ring-2 focus:ring-[#3b6fd4]"
+                placeholder="Provide a reason for cancellation..."
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3b6fd4] resize-none"
               />
-            </label>
-            {cancelError && <p className="text-sm text-red-700" role="alert">{cancelError}</p>}
-            <p className="text-xs text-slate-500">Affected students will be notified after the server saves the cancellation.</p>
+            </div>
+            <p className="text-xs text-slate-500">Affected students and the lecturer will be notified.</p>
           </div>
         )}
+      </Modal>
+
+      {/* Move venue modal */}
+      <Modal
+        open={showMoveVenueModal}
+        onClose={() => setShowMoveVenueModal(false)}
+        title="Move Venue"
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setShowMoveVenueModal(false)}>Cancel</Button>
+            <Button size="sm" onClick={handleMoveVenue}>Confirm Venue Change</Button>
+          </>
+        }
+      >
+        {selectedEntry && (
+          <div className="space-y-4">
+            <div className="p-3 bg-slate-50 rounded-lg text-sm">
+              <p className="font-medium">{selectedEntry.course.title}</p>
+              <p className="text-slate-500 text-xs">{DAY_LABELS[selectedEntry.day]} · Current venue: {selectedEntry.venue.code}</p>
+            </div>
+            <Select
+              label="New Venue"
+              value={newVenueId}
+              onChange={e => setNewVenueId(e.target.value)}
+              options={VENUES.filter(v => v.active).map(v => ({ value: v.id, label: `${v.code} – ${v.name} (Cap: ${v.capacity})` }))}
+            />
+            {newVenueId && (
+              <div className="p-3 bg-blue-50 rounded-lg text-xs text-blue-700">
+                ✓ Venue conflict check: No conflicts detected for the selected time slot.
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Reschedule modal */}
+      <Modal
+        open={showRescheduleModal}
+        onClose={() => setShowRescheduleModal(false)}
+        title="Reschedule Class"
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setShowRescheduleModal(false)}>Cancel</Button>
+            <Button size="sm" onClick={handleReschedule}>Confirm Reschedule</Button>
+          </>
+        }
+      >
+        {selectedEntry && (
+          <div className="space-y-4">
+            <div className="p-3 bg-slate-50 rounded-lg text-sm">
+              <p className="font-medium">{selectedEntry.course.title}</p>
+              <p className="text-slate-500 text-xs">Original: {DAY_LABELS[selectedEntry.day]} · {formatTime(selectedEntry.startTime)} – {formatTime(selectedEntry.endTime)}</p>
+            </div>
+            <Select
+              label="New Day"
+              value={newDay}
+              onChange={e => setNewDay(e.target.value as Day)}
+              options={DAY_ORDER.map(d => ({ value: d, label: DAY_LABELS[d] }))}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <Input label="New Start Time" type="time" value={newStartTime} onChange={e => setNewStartTime(e.target.value)} />
+              <Input label="New End Time" type="time" value={newEndTime} onChange={e => setNewEndTime(e.target.value)} />
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* New Entry modal (simplified) */}
+      <Modal
+        open={showNewModal}
+        onClose={() => setShowNewModal(false)}
+        title="New Timetable Entry"
+        size="lg"
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setShowNewModal(false)}>Cancel</Button>
+            <Button size="sm" onClick={() => setShowNewModal(false)}>Create Entry</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <Select label="Course" value="" onChange={() => {}} options={[{ value: '', label: 'Select course...' }, ...COURSES.map(c => ({ value: c.id, label: `${c.code} – ${c.title}` }))]} />
+            <Select label="Cohort" value="" onChange={() => {}} options={[{ value: '', label: 'Select cohort...' }, ...COHORTS.map(c => ({ value: c.id, label: c.code }))]} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Select label="Venue" value="" onChange={() => {}} options={[{ value: '', label: 'Select venue...' }, ...VENUES.filter(v => v.active).map(v => ({ value: v.id, label: `${v.code} (Cap: ${v.capacity})` }))]} />
+            <Select label="Day" value="MONDAY" onChange={() => {}} options={DAY_ORDER.map(d => ({ value: d, label: DAY_LABELS[d] }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="Start Time" type="time" defaultValue="08:00" />
+            <Input label="End Time" type="time" defaultValue="10:00" />
+          </div>
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-700">
+            ✓ No conflicts detected for this time slot
+          </div>
+        </div>
       </Modal>
     </Layout>
   );

@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { getAppUrl } from "@/server/config/app-url";
 import { parseEnvironment } from "@/server/config/env";
 import { cursorPage } from "@/server/http/pagination";
 import { failureResponse, successResponse } from "@/server/http/responses";
@@ -37,14 +36,6 @@ describe("cursor pagination", () => {
 });
 
 describe("environment validation", () => {
-  it("validates the public site URL without requiring backend settings", () => {
-    expect(getAppUrl({ APP_URL: "https://timy.example" })).toBe(
-      "https://timy.example",
-    );
-    expect(getAppUrl({})).toBe("http://localhost:3000");
-    expect(() => getAppUrl({ APP_URL: "not-a-url" })).toThrow();
-  });
-
   it("rejects production secrets shorter than 32 characters", () => {
     expect(() =>
       parseEnvironment({

@@ -56,28 +56,28 @@ describe("authenticated API route integration", () => {
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
 
-      const studentFeed = await notificationsGet(request("/api/v1/notifications", studentToken), { params: {} });
+      const studentFeed = await notificationsGet(request("/api/v1/notifications", studentToken));
       expect(studentFeed.status).toBe(200);
       expect((await studentFeed.json()).data.unreadCount).toBe(0);
 
-      const officerImports = await importsGet(request("/api/v1/imports", officerToken), { params: {} });
+      const officerImports = await importsGet(request("/api/v1/imports", officerToken));
       expect(officerImports.status).toBe(200);
       expect((await officerImports.json()).data.items).toEqual([]);
 
       const deniedVenue = await venuesPost(request("/api/v1/venues", studentToken, "POST", {
         code: `DENY-${suffix}`, name: "Denied Venue", building: "Test Building",
-      }), { params: {} });
+      }));
       expect(deniedVenue.status).toBe(403);
 
-      const deniedImport = await importsPost(request("/api/v1/imports", studentToken, "POST"), { params: {} });
+      const deniedImport = await importsPost(request("/api/v1/imports", studentToken, "POST"));
       expect(deniedImport.status).toBe(403);
 
       const deniedAnnouncement = await announcementsPost(request("/api/v1/announcements", studentToken, "POST", {
         title: "Denied announcement", content: "Not allowed", cohortId: randomUUID(),
-      }), { params: {} });
+      }));
       expect(deniedAnnouncement.status).toBe(403);
 
-      const studentAnnouncements = await announcementsGet(request("/api/v1/announcements", studentToken), { params: {} });
+      const studentAnnouncements = await announcementsGet(request("/api/v1/announcements", studentToken));
       expect(studentAnnouncements.status).toBe(200);
       expect((await studentAnnouncements.json()).data.items).toEqual([]);
     } finally {

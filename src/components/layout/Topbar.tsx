@@ -5,9 +5,8 @@ import { Bell, Search, ChevronDown, LogOut, User } from 'lucide-react';
 import { useRouter } from "next/navigation";
 import { SidebarToggle } from './Sidebar';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNotifications } from '../../hooks/use-notifications';
 import { timeAgo } from '../../lib/utils';
-import { useApiCollection } from '../../hooks/use-api-collection';
-import { toNotification, type ApiNotification } from '../../lib/notification-adapter';
 
 interface TopbarProps {
   onMenuClick: () => void;
@@ -17,23 +16,14 @@ interface TopbarProps {
 
 export function Topbar({ onMenuClick, title, breadcrumb }: TopbarProps) {
   const { user, logout } = useAuth();
+  const { notifications, unreadCount, markAsRead } = useNotifications();
   const router = useRouter();
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [logoutError, setLogoutError] = useState<string | null>(null);
 
-  const { items: apiNotifications, isLoading: notificationsLoading, error: notificationsError } =
-    useApiCollection<ApiNotification>("/api/v1/notifications");
-  const userNotifications = apiNotifications.map(toNotification);
-  const unreadCount = userNotifications.filter(n => !n.read).length;
-
-  async function handleLogout() {
-    const result = await logout();
-    if (!result.success) {
-      setLogoutError(result.error ?? "Sign out failed");
-      return;
-    }
-    router.replace('/');
+  function handleLogout() {
+    logout();
+    router.push('/');
   }
 
   return (
@@ -58,6 +48,11 @@ export function Topbar({ onMenuClick, title, breadcrumb }: TopbarProps) {
         ) : null}
       </div>
 
+      {/* Academic year pill */}
+      <div className="hidden sm:flex items-center gap-1.5 text-xs bg-navy-50 text-navy-700 px-3 py-1.5 rounded-full border border-navy-200 font-medium" style={{ background: '#f4f7fe', color: '#1a2f5c', borderColor: '#ccdaf8' }}>
+        2024/2025 · Sem 1
+      </div>
+
       {/* Notifications */}
       <div className="relative">
         <button
@@ -80,15 +75,15 @@ export function Topbar({ onMenuClick, title, breadcrumb }: TopbarProps) {
               <span className="text-xs text-slate-500">{unreadCount} unread</span>
             </div>
             <div className="max-h-80 overflow-y-auto">
-              {notificationsLoading ? (
-                <p className="py-8 text-center text-sm text-slate-500" role="status">Loading notifications…</p>
-              ) : notificationsError ? (
-                <p className="px-4 py-6 text-center text-sm text-red-700" role="alert">{notificationsError}</p>
-              ) : userNotifications.length === 0 ? (
+              {notifications.length === 0 ? (
                 <p className="text-sm text-slate-500 text-center py-8">No notifications</p>
               ) : (
-                userNotifications.slice(0, 5).map(n => (
-                  <div key={n.id} className={`px-4 py-3 border-b border-slate-50 hover:bg-slate-50 cursor-pointer ${!n.read ? 'bg-blue-50/50' : ''}`}>
+                notifications.slice(0, 5).map(n => (
+                  <div
+                    key={n.id}
+                    onClick={() => markAsRead(n.id)}
+                    className={`px-4 py-3 border-b border-slate-50 hover:bg-slate-50 cursor-pointer ${!n.read ? 'bg-blue-50/50' : ''}`}
+                  >
                     <div className="flex items-start gap-2">
                       {!n.read && <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-1.5" />}
                       <div className={!n.read ? '' : 'ml-4'}>
@@ -134,8 +129,7 @@ export function Topbar({ onMenuClick, title, breadcrumb }: TopbarProps) {
               <button onClick={() => setShowProfile(false)} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg">
                 <User size={15} /> Profile
               </button>
-              {logoutError && <p className="px-3 py-2 text-xs text-red-700" role="alert">{logoutError}</p>}
-              <button onClick={() => { void handleLogout(); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg">
+              <button onClick={handleLogout} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg">
                 <LogOut size={15} /> Sign Out
               </button>
             </div>

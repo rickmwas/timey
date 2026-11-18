@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Calendar, BookOpen, MapPin, Bell, Megaphone,
@@ -11,8 +10,6 @@ import {
 import { cn, ROLE_LABEL } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Role } from '../../types';
-import { useApiCollection } from '../../hooks/use-api-collection';
-import type { ApiNotification } from '../../lib/notification-adapter';
 
 interface NavItem {
   to: string;
@@ -27,7 +24,8 @@ const studentNav: NavItem[] = [
   { to: '/courses', icon: <BookOpen size={18} />, label: 'Courses' },
   { to: '/venues', icon: <MapPin size={18} />, label: 'Venues' },
   { to: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
-  { to: '/notifications', icon: <Bell size={18} />, label: 'Notifications' },
+  { to: '/notifications', icon: <Bell size={18} />, label: 'Notifications', badge: 2 },
+  { to: '/settings', icon: <Settings size={18} />, label: 'Settings' },
 ];
 
 const lecturerNav: NavItem[] = [
@@ -36,7 +34,8 @@ const lecturerNav: NavItem[] = [
   { to: '/courses', icon: <BookOpen size={18} />, label: 'Courses' },
   { to: '/venues', icon: <MapPin size={18} />, label: 'Venues' },
   { to: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
-  { to: '/notifications', icon: <Bell size={18} />, label: 'Notifications' },
+  { to: '/notifications', icon: <Bell size={18} />, label: 'Notifications', badge: 1 },
+  { to: '/settings', icon: <Settings size={18} />, label: 'Settings' },
 ];
 
 const officerNav: NavItem[] = [
@@ -51,6 +50,7 @@ const officerNav: NavItem[] = [
   { to: '/departments', icon: <Building2 size={18} />, label: 'Departments' },
   { to: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
   { to: '/notifications', icon: <Bell size={18} />, label: 'Notifications' },
+  { to: '/settings', icon: <Settings size={18} />, label: 'Settings' },
 ];
 
 const adminNav: NavItem[] = [
@@ -84,25 +84,11 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
   const { user, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const { items: unreadNotifications } = useApiCollection<ApiNotification>(
-    "/api/v1/notifications?unreadOnly=true",
-  );
-  const navItems = user
-    ? navByRole[user.role].map(item =>
-        item.to === "/notifications"
-          ? { ...item, badge: unreadNotifications.length || undefined }
-          : item,
-      )
-    : [];
-  const [logoutError, setLogoutError] = useState<string | null>(null);
+  const navItems = user ? navByRole[user.role] : [];
 
-  async function handleLogout() {
-    const result = await logout();
-    if (!result.success) {
-      setLogoutError(result.error ?? "Sign out failed");
-      return;
-    }
-    router.replace('/');
+  function handleLogout() {
+    logout();
+    router.push('/');
   }
 
   return (
@@ -193,9 +179,8 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
 
       {/* Logout */}
       <div className="px-3 py-3 border-t border-white/10">
-        {logoutError && <p className="mb-2 text-xs text-red-200" role="alert">{logoutError}</p>}
         <button
-          onClick={() => { void handleLogout(); }}
+          onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-blue-200 hover:bg-white/10 hover:text-white transition-colors"
         >
           <LogOut size={18} />

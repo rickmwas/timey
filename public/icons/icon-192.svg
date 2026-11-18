@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <rect width="192" height="192" rx="40" fill="#1a2f5c"/>
+  <circle cx="96" cy="96" r="64" fill="#25468a"/>
+  <!-- Clock / Calendar Icon Graphic -->
+  <circle cx="96" cy="96" r="48" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
+  <polyline points="96,64 96,96 118,108" fill="none" stroke="#9bbdf0" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Pin Indicator -->
+  <circle cx="132" cy="60" r="14" fill="#3b6fd4" stroke="#ffffff" stroke-width="4"/>
+  <circle cx="132" cy="60" r="5" fill="#ffffff"/>
+</svg>

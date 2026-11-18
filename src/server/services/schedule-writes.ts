@@ -11,6 +11,8 @@ import type { AuthenticatedUser } from "@/server/middleware/require-user";
 import { detectSlotConflicts, type SlotLike } from "@/server/services/conflicts";
 import { buildNotificationMessage, buildScheduleChangeMetadata, type ScheduleChangeType as ScheduleChangeLabel } from "@/server/services/schedule-ops";
 import { createNotificationBatch } from "@/server/services/notifications";
+import { eventBus } from "@/server/events/event-bus";
+import { sendPushToCohort } from "@/server/push/web-push";
 
 type MutationAction = "reschedule" | "cancel" | "postpone";
 type MutationInput = {
@@ -382,10 +384,35 @@ export async function writeScheduleChange(
       const notificationCount = await createNotificationBatch(transaction, recipients.map(({ id }) => ({
           recipientId: id,
           sourceChangeId: change.id,
-          title: `${entry.offering.course.code}: ${changeType.replace(/_/g, " ").toLowerCase()}`,
+          title: `${entry.offering.course.code}: ${changeType.replaceAll("_", " ").toLowerCase()}`,
           message,
           type: notificationTypeValue,
         })));
+
+      // Broadcast to live SSE stream for real-time mobile ringing & lockscreen push
+      eventBus.emitMutation({
+        type: action === "cancel" ? "CANCELLED" : "RESCHEDULED",
+        entryId,
+        courseCode: entry.offering.course.code,
+        courseTitle: entry.offering.course.title,
+        oldVenue: entry.venue.code,
+        newVenue: next.venueId ?? entry.venue.code,
+        day: next.day,
+        startTime: next.startTime ?? undefined,
+        endTime: next.endTime ?? undefined,
+        reason: input.reason,
+        cohortId: entry.offering.cohortId,
+        recipientIds: recipients.map((r) => r.id),
+        message,
+      });
+
+      // Dispatch native Web Push to student devices (lockscreen waking)
+      sendPushToCohort(entry.offering.cohortId, {
+        title: `${entry.offering.course.code}: ${changeType.replaceAll("_", " ").toLowerCase()}`,
+        message,
+        url: "/timetable",
+        tag: `schedule-change-${entryId}`,
+      }).catch((err) => console.warn("[ScheduleWrites] Web push notice:", err));
 
       return { change, override, notificationCount, replayed: false };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
