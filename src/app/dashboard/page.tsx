@@ -5,6 +5,7 @@ import { StudentDashboard } from "@/legacy-pages/student/StudentDashboard";
 import { LecturerDashboard } from "@/legacy-pages/lecturer/LecturerDashboard";
 import { OfficerDashboard } from "@/legacy-pages/officer/OfficerDashboard";
 import { AdminDashboard } from "@/legacy-pages/admin/AdminDashboard";
+import { CodDashboard } from "@/legacy-pages/cod/CodDashboard";
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -17,6 +18,10 @@ export default function DashboardPage() {
 
     case "LECTURER":
       return <LecturerDashboard />;
+
+    case "COD":
+    case "DEAN":
+      return <CodDashboard />;
 
     case "TIMETABLE_OFFICER":
       return <OfficerDashboard />;

@@ -53,4 +53,56 @@ describe("slot conflict detection", () => {
       expect.arrayContaining(["VENUE_CONFLICT", "LECTURER_CONFLICT", "COHORT_CONFLICT"]),
     );
   });
+
+  it("detects venue capacity violations when cohort size exceeds room capacity", () => {
+    const conflicts = detectSlotConflicts([
+      {
+        id: "slot-large",
+        day: "TUESDAY",
+        startTime: "08:00",
+        endTime: "10:00",
+        venueId: "lab-1",
+        lecturerId: "lecturer-1",
+        offeringId: "offering-1",
+        cohortId: "cohort-big",
+        venueCapacity: 40,
+        cohortExpectedSize: 120,
+      },
+    ]);
+
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].type).toBe("CAPACITY_CONFLICT");
+    expect(conflicts[0].details).toContain("exceeds venue capacity");
+  });
+
+  it("detects student enrollment clashes when concurrent slots share enrolled students", () => {
+    const conflicts = detectSlotConflicts([
+      {
+        id: "slot-elective-a",
+        day: "WEDNESDAY",
+        startTime: "14:00",
+        endTime: "16:00",
+        venueId: "room-1",
+        lecturerId: "lecturer-1",
+        offeringId: "offering-a",
+        cohortId: "cohort-1",
+        enrolledStudentIds: ["student-101", "student-102"],
+      },
+      {
+        id: "slot-elective-b",
+        day: "WEDNESDAY",
+        startTime: "15:00",
+        endTime: "17:00",
+        venueId: "room-2",
+        lecturerId: "lecturer-2",
+        offeringId: "offering-b",
+        cohortId: "cohort-2",
+        enrolledStudentIds: ["student-102", "student-103"],
+      },
+    ]);
+
+    const studentConflicts = conflicts.filter((c) => c.type === "STUDENT_ENROLLMENT_CONFLICT");
+    expect(studentConflicts).toHaveLength(1);
+    expect(studentConflicts[0].details).toContain("1 student(s) enrolled in both concurrent units");
+  });
 });

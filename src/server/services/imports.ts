@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { basename } from "node:path";
-import { ImportStatus, Prisma, Role, StagedValidationStatus } from "@prisma/client";
+import { ImportStatus, Prisma, ResolutionState, Role, StagedValidationStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { AppError } from "@/server/errors/app-error";
 import { cursorPage } from "@/server/http/pagination";
@@ -8,7 +8,7 @@ import type { AuthenticatedUser } from "@/server/middleware/require-user";
 import { detectSlotConflicts, type SlotLike } from "@/server/services/conflicts";
 import { MAX_IMPORT_BYTES, normalizeDay, normalizeTimeRange, parseTimetableFile, type ParsedImportRow } from "@/server/services/import-parser";
 import { createNotificationBatch } from "@/server/services/notifications";
-import { localFileStorage } from "@/server/storage/local-file-storage";
+import { fileStorage } from "@/server/storage/file-storage-provider";
 
 export type ImportListInput = { cursor?: string; limit: number; status?: ImportStatus };
 export type ImportRowCorrection = Partial<Omit<ParsedImportRow, "rawRowIndex">> & { expectedVersion: number };
@@ -35,50 +35,135 @@ function assertImportMutable(status: ImportStatus): void {
   }
 }
 
+function stripHonorifics(val: string): string {
+  return val.replace(/\b(prof|professor|dr|doctor|mr|mrs|ms|rev)\b\.?/gi, "").trim();
+}
+
 async function makeResolver(transaction: Prisma.TransactionClient, periodId: string) {
-  const [courses, venues, aliases, cohorts, lecturers, offerings] = await Promise.all([
-    transaction.course.findMany({ where: { isActive: true }, select: { id: true, code: true, title: true } }),
-    transaction.venue.findMany({ where: { isActive: true, isUnderMaintenance: false }, select: { id: true, code: true, name: true } }),
+  const [courses, courseAliases, venues, venueAliases, cohorts, lecturers, lecturerAliases, offerings] = await Promise.all([
+    transaction.course.findMany({ where: { isActive: true }, select: { id: true, code: true, title: true, departmentId: true } }),
+    transaction.courseAlias.findMany({ select: { normalizedAlias: true, courseId: true } }),
+    transaction.venue.findMany({ where: { isActive: true, isUnderMaintenance: false }, select: { id: true, code: true, name: true, capacity: true } }),
     transaction.venueAlias.findMany({ select: { normalizedAlias: true, venueId: true } }),
-    transaction.cohort.findMany({ where: { isActive: true }, select: { id: true, code: true, name: true } }),
-    transaction.user.findMany({ where: { role: Role.LECTURER, status: "ACTIVE" }, select: { id: true, email: true, institutionalId: true, fullName: true } }),
+    transaction.cohort.findMany({ where: { isActive: true }, select: { id: true, code: true, name: true, expectedSize: true, departmentId: true } }),
+    transaction.user.findMany({ where: { role: Role.LECTURER, status: "ACTIVE" }, select: { id: true, email: true, institutionalId: true, fullName: true, departmentId: true } }),
+    transaction.lecturerAlias.findMany({ select: { normalizedAlias: true, lecturerId: true } }),
     transaction.courseOffering.findMany({ where: { periodId, isActive: true }, select: { id: true, courseId: true, cohortId: true } }),
   ]);
-  const aliasesByName = new Map(aliases.map((alias) => [alias.normalizedAlias, alias.venueId]));
+
+  const venueAliasesByName = new Map(venueAliases.map((alias) => [alias.normalizedAlias, alias.venueId]));
+  const courseAliasesByName = new Map(courseAliases.map((alias) => [alias.normalizedAlias, alias.courseId]));
+  const lecturerAliasesByName = new Map(lecturerAliases.map((alias) => [alias.normalizedAlias, alias.lecturerId]));
 
   return (row: ParsedImportRow) => {
     const errors: string[] = [];
+    const trace: Record<string, any> = {};
+
+    // 1. Resolve Course
     const courseKey = normalizeEntity(row.rawCourseCode ?? "");
-    const course = courses.find((item) => normalizeEntity(item.code) === courseKey)
-      ?? courses.find((item) => row.rawCourseTitle && normalizeEntity(item.title) === normalizeEntity(row.rawCourseTitle));
-    if (!course) errors.push(`Course not found: ${row.rawCourseCode ?? row.rawCourseTitle ?? "blank"}`);
+    const courseAliasId = courseAliasesByName.get(courseKey);
+    let course = courses.find((item) => normalizeEntity(item.code) === courseKey);
+    let courseMatchState: ResolutionState = ResolutionState.EXACT_MATCH;
 
+    if (!course && courseAliasId) {
+      course = courses.find((item) => item.id === courseAliasId);
+      if (course) courseMatchState = ResolutionState.ALIAS_MATCH;
+    }
+    if (!course && row.rawCourseTitle) {
+      const titleKey = normalizeEntity(row.rawCourseTitle);
+      course = courses.find((item) => normalizeEntity(item.title) === titleKey);
+      if (course) courseMatchState = ResolutionState.ALIAS_MATCH;
+    }
+
+    if (!course) {
+      courseMatchState = ResolutionState.UNMATCHED;
+      errors.push(`Course not found: ${row.rawCourseCode ?? row.rawCourseTitle ?? "blank"}`);
+    }
+    trace.course = { state: courseMatchState, matchedId: course?.id ?? null };
+
+    // 2. Resolve Venue
     const venueKey = normalizeEntity(row.rawVenue ?? "");
-    const aliasVenueId = aliasesByName.get(venueKey);
-    const venue = venues.find((item) => normalizeEntity(item.code) === venueKey || normalizeEntity(item.name) === venueKey || item.id === aliasVenueId);
-    if (!venue) errors.push(`Venue not found or unavailable: ${row.rawVenue ?? "blank"}`);
+    const aliasVenueId = venueAliasesByName.get(venueKey);
+    let venue = venues.find((item) => normalizeEntity(item.code) === venueKey);
+    let venueMatchState: ResolutionState = ResolutionState.EXACT_MATCH;
 
+    if (!venue && aliasVenueId) {
+      venue = venues.find((item) => item.id === aliasVenueId);
+      if (venue) venueMatchState = ResolutionState.ALIAS_MATCH;
+    }
+    if (!venue) {
+      venue = venues.find((item) => normalizeEntity(item.name) === venueKey);
+      if (venue) venueMatchState = ResolutionState.ALIAS_MATCH;
+    }
+
+    if (!venue) {
+      venueMatchState = ResolutionState.UNMATCHED;
+      errors.push(`Venue not found or unavailable: ${row.rawVenue ?? "blank"}`);
+    }
+    trace.venue = { state: venueMatchState, matchedId: venue?.id ?? null };
+
+    // 3. Resolve Day & Time
     const dayText = normalizeDay(row.rawDay ?? "");
     if (!dayText) errors.push(`Day is invalid: ${row.rawDay ?? "blank"}`);
     const time = normalizeTimeRange(row.rawTime ?? "");
     if (!time) errors.push(`Time range is invalid: ${row.rawTime ?? "blank"}`);
 
-    const lecturerKey = normalizeEntity(row.rawLecturer ?? "");
-    const lecturer = lecturers.find((item) =>
+    // 4. Resolve Lecturer (with honorific stripping and token matching)
+    const rawLecturerText = row.rawLecturer ?? "";
+    const lecturerKey = normalizeEntity(rawLecturerText);
+    const strippedKey = normalizeEntity(stripHonorifics(rawLecturerText));
+    const aliasLecturerId = lecturerAliasesByName.get(lecturerKey) || lecturerAliasesByName.get(strippedKey);
+
+    let lecturer = lecturers.find((item) =>
       normalizeEntity(item.email) === lecturerKey ||
       normalizeEntity(item.institutionalId) === lecturerKey ||
-      normalizeEntity(item.fullName) === lecturerKey,
+      normalizeEntity(item.fullName) === lecturerKey
     );
-    if (!lecturer) errors.push(`Lecturer not found: ${row.rawLecturer ?? "blank"}`);
+    let lecturerMatchState: ResolutionState = ResolutionState.EXACT_MATCH;
 
+    if (!lecturer && aliasLecturerId) {
+      lecturer = lecturers.find((item) => item.id === aliasLecturerId);
+      if (lecturer) lecturerMatchState = ResolutionState.ALIAS_MATCH;
+    }
+    if (!lecturer && strippedKey.length > 2) {
+      // Fuzzy honorific match
+      lecturer = lecturers.find((item) => normalizeEntity(stripHonorifics(item.fullName)) === strippedKey);
+      if (lecturer) lecturerMatchState = ResolutionState.ALIAS_MATCH;
+    }
+
+    if (!lecturer) {
+      lecturerMatchState = ResolutionState.UNMATCHED;
+      errors.push(`Lecturer not found: ${row.rawLecturer ?? "blank"}`);
+    }
+    trace.lecturer = { state: lecturerMatchState, matchedId: lecturer?.id ?? null };
+
+    // 5. Resolve Cohort
     const cohortKey = normalizeEntity(row.rawCohort ?? "");
-    const cohort = cohorts.find((item) => normalizeEntity(item.code) === cohortKey || normalizeEntity(item.name) === cohortKey);
-    if (!cohort) errors.push(`Cohort not found: ${row.rawCohort ?? "blank"}`);
+    let cohort = cohorts.find((item) => normalizeEntity(item.code) === cohortKey);
+    let cohortMatchState: ResolutionState = ResolutionState.EXACT_MATCH;
+    if (!cohort) {
+      cohort = cohorts.find((item) => normalizeEntity(item.name) === cohortKey);
+      if (cohort) cohortMatchState = ResolutionState.ALIAS_MATCH;
+    }
+    if (!cohort) {
+      cohortMatchState = ResolutionState.UNMATCHED;
+      errors.push(`Cohort not found: ${row.rawCohort ?? "blank"}`);
+    }
+    trace.cohort = { state: cohortMatchState, matchedId: cohort?.id ?? null };
 
+    // 6. Check Course Offering
     const offering = course && cohort
       ? offerings.find((item) => item.courseId === course.id && item.cohortId === cohort.id)
       : undefined;
-    if (course && cohort && !offering) errors.push(`Course offering is not configured for this period: ${course.code} / ${cohort.code}`);
+    if (course && cohort && !offering) {
+      errors.push(`Course offering is not configured for this period: ${course.code} / ${cohort.code}`);
+    }
+
+    const overallState: ResolutionState = errors.length > 0
+      ? (errors.some((e) => e.includes("invalid")) ? ResolutionState.INVALID : ResolutionState.UNMATCHED)
+      : (courseMatchState === ResolutionState.ALIAS_MATCH || venueMatchState === ResolutionState.ALIAS_MATCH || lecturerMatchState === ResolutionState.ALIAS_MATCH
+          ? ResolutionState.ALIAS_MATCH
+          : ResolutionState.EXACT_MATCH);
 
     return {
       resolvedCourseId: course?.id ?? null,
@@ -90,6 +175,8 @@ async function makeResolver(transaction: Prisma.TransactionClient, periodId: str
       normalizedStartTime: time?.startTime ?? null,
       normalizedEndTime: time?.endTime ?? null,
       validationStatus: errors.length > 0 ? StagedValidationStatus.INVALID : StagedValidationStatus.VALID,
+      resolutionStatus: overallState,
+      resolutionTrace: trace,
       errors,
       conflicts: [] as unknown[],
     };
@@ -136,7 +223,7 @@ export async function createImport(
 
   const extension = safeName.toLowerCase().endsWith(".xlsx") ? "xlsx" : "csv";
   const storageKey = `${randomUUID()}.${extension}`;
-  await localFileStorage.put(storageKey, input.contents);
+  await fileStorage.put(storageKey, input.contents);
   try {
     return await db.$transaction(async (transaction) => {
       const job = await transaction.importJob.create({
@@ -167,7 +254,7 @@ export async function createImport(
       return job;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   } catch (error) {
-    await localFileStorage.delete(storageKey);
+    await fileStorage.delete(storageKey);
     throw parseError(error);
   }
 }
@@ -374,6 +461,6 @@ export async function discardImport(jobId: string, actor: AuthenticatedUser, exp
     });
     return { id: job.id, status: ImportStatus.DISCARDED, storageKey: job.storageKey };
   });
-  await localFileStorage.delete(discarded.storageKey);
+  await fileStorage.delete(discarded.storageKey);
   return { id: discarded.id, status: discarded.status };
 }

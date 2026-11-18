@@ -50,6 +50,8 @@ export function AdminDashboard() {
   const roleCounts: Record<Role, number> = {
     STUDENT: users.filter(user => user.role === "STUDENT").length,
     LECTURER: users.filter(user => user.role === "LECTURER").length,
+    COD: users.filter(user => user.role === "COD").length,
+    DEAN: users.filter(user => user.role === "DEAN").length,
     TIMETABLE_OFFICER: users.filter(user => user.role === "TIMETABLE_OFFICER").length,
     ADMIN: users.filter(user => user.role === "ADMIN").length,
   };

@@ -68,9 +68,36 @@ const adminNav: NavItem[] = [
   { to: '/admin/settings', icon: <Settings size={18} />, label: 'System Settings' },
 ];
 
+const codNav: NavItem[] = [
+  { to: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
+  { to: '/timetable', icon: <Calendar size={18} />, label: 'Department Timetable' },
+  { to: '/courses', icon: <BookOpen size={18} />, label: 'Course Units' },
+  { to: '/cohorts', icon: <GraduationCap size={18} />, label: 'Cohorts' },
+  { to: '/departments', icon: <Building2 size={18} />, label: 'My Department' },
+  { to: '/rescheduling', icon: <RefreshCw size={18} />, label: 'Change Approvals' },
+  { to: '/venues', icon: <MapPin size={18} />, label: 'Venues' },
+  { to: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
+  { to: '/notifications', icon: <Bell size={18} />, label: 'Notifications' },
+  { to: '/settings', icon: <Settings size={18} />, label: 'Settings' },
+];
+
+const deanNav: NavItem[] = [
+  { to: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
+  { to: '/timetable', icon: <Calendar size={18} />, label: 'School Timetable' },
+  { to: '/departments', icon: <Building2 size={18} />, label: 'Departments' },
+  { to: '/courses', icon: <BookOpen size={18} />, label: 'Courses' },
+  { to: '/cohorts', icon: <GraduationCap size={18} />, label: 'Cohorts' },
+  { to: '/venues', icon: <MapPin size={18} />, label: 'Venues' },
+  { to: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
+  { to: '/notifications', icon: <Bell size={18} />, label: 'Notifications' },
+  { to: '/settings', icon: <Settings size={18} />, label: 'Settings' },
+];
+
 const navByRole: Record<Role, NavItem[]> = {
   STUDENT: studentNav,
   LECTURER: lecturerNav,
+  COD: codNav,
+  DEAN: deanNav,
   TIMETABLE_OFFICER: officerNav,
   ADMIN: adminNav,
 };

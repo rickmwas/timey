@@ -15,12 +15,13 @@ export type ParsedImportRow = {
   rawTime: string | null;
   rawLecturer: string | null;
   rawCohort: string | null;
+  sheetName?: string;
 };
 
-const headerPatterns: Record<keyof Omit<ParsedImportRow, "rawRowIndex">, RegExp> = {
+const headerPatterns: Record<keyof Omit<ParsedImportRow, "rawRowIndex" | "sheetName">, RegExp> = {
   rawCourseCode: /(course|unit|code|subject)/i,
   rawCourseTitle: /(title|description|course\s*name)/i,
-  rawVenue: /(venue|room|hall|location)/i,
+  rawVenue: /(venue|room|hall|location|lab)/i,
   rawDay: /(day|weekday)/i,
   rawTime: /(time|slot|hours|period)/i,
   rawLecturer: /(lecturer|instructor|teacher|staff|prof)/i,
@@ -29,35 +30,49 @@ const headerPatterns: Record<keyof Omit<ParsedImportRow, "rawRowIndex">, RegExp>
 
 function cellString(value: unknown): string {
   if (value === null || value === undefined) return "";
-  if (typeof value === "object" && "text" in value) return String(value.text ?? "").trim();
-  if (typeof value === "object" && "richText" in value && Array.isArray(value.richText)) {
-    return value.richText.map((item) => String(item.text ?? "")).join("").trim();
+  if (typeof value === "object") {
+    if ("result" in value && value.result !== undefined && value.result !== null) {
+      return cellString(value.result);
+    }
+    if ("text" in value) return String((value as any).text ?? "").trim();
+    if ("richText" in value && Array.isArray((value as any).richText)) {
+      return (value as any).richText.map((item: any) => String(item.text ?? "")).join("").trim();
+    }
+    if (value instanceof Date) {
+      return `${String(value.getUTCHours()).padStart(2, "0")}:${String(value.getUTCMinutes()).padStart(2, "0")}`;
+    }
   }
   return String(value).trim();
 }
 
-function normalizeTable(rows: string[][]): ParsedImportRow[] {
+function normalizeTable(rows: string[][], sheetName?: string, baseRowOffset = 0): ParsedImportRow[] {
   const headerIndex = rows.findIndex((row) => row.some((cell) => cell.trim().length > 0));
-  if (headerIndex < 0) throw new AppError("EMPTY_IMPORT", "The uploaded file has no tabular data", 400);
+  if (headerIndex < 0) return [];
   const headers = rows[headerIndex].map((cell) => cell.trim());
-  const columns = new Map<keyof Omit<ParsedImportRow, "rawRowIndex">, number>();
-  for (const [field, pattern] of Object.entries(headerPatterns) as Array<[keyof Omit<ParsedImportRow, "rawRowIndex">, RegExp]>) {
+  const columns = new Map<keyof Omit<ParsedImportRow, "rawRowIndex" | "sheetName">, number>();
+  for (const [field, pattern] of Object.entries(headerPatterns) as Array<[keyof Omit<ParsedImportRow, "rawRowIndex" | "sheetName">, RegExp]>) {
     const position = headers.findIndex((header) => pattern.test(header));
     if (position >= 0) columns.set(field, position);
   }
   for (const required of ["rawCourseCode", "rawVenue", "rawDay", "rawTime", "rawLecturer", "rawCohort"] as const) {
-    if (!columns.has(required)) throw new AppError("IMPORT_HEADERS_INVALID", `Required timetable column is missing: ${required.replace("raw", "")}`, 400);
+    if (!columns.has(required)) {
+      if (sheetName) {
+        // If sheet is missing required columns, it's not a timetable sheet
+        return [];
+      }
+      throw new AppError("IMPORT_HEADERS_INVALID", `Required timetable column is missing: ${required.replace("raw", "")}`, 400);
+    }
   }
 
   return rows.slice(headerIndex + 1).flatMap((row, index) => {
     if (row.every((cell) => !cell.trim())) return [];
-    const read = (field: keyof Omit<ParsedImportRow, "rawRowIndex">) => {
+    const read = (field: keyof Omit<ParsedImportRow, "rawRowIndex" | "sheetName">) => {
       const column = columns.get(field);
       const value = column === undefined ? "" : row[column] ?? "";
       return value.trim() || null;
     };
     return [{
-      rawRowIndex: headerIndex + index + 2,
+      rawRowIndex: baseRowOffset + headerIndex + index + 2,
       rawCourseCode: read("rawCourseCode"),
       rawCourseTitle: read("rawCourseTitle"),
       rawVenue: read("rawVenue"),
@@ -65,6 +80,7 @@ function normalizeTable(rows: string[][]): ParsedImportRow[] {
       rawTime: read("rawTime"),
       rawLecturer: read("rawLecturer"),
       rawCohort: read("rawCohort"),
+      ...(sheetName ? { sheetName } : {}),
     }];
   });
 }
@@ -101,13 +117,67 @@ function formatTime(minutes: number): string {
 }
 
 export function normalizeTimeRange(value: string): { startTime: string; endTime: string } | null {
-  const match = value.trim().match(/^\s*(\d{1,2})[:.]?(\d{2})?\s*(am|pm)?\s*[-–]\s*(\d{1,2})[:.]?(\d{2})?\s*(am|pm)?\s*$/i);
-  if (!match) return null;
-  const sharedMeridiem = match[6] ?? match[3];
-  const start = timeToMinutes(match[1], match[2] ?? "0", match[3] ?? sharedMeridiem);
-  const end = timeToMinutes(match[4], match[5] ?? "0", match[6] ?? sharedMeridiem);
-  if (start === null || end === null || end <= start) return null;
-  return { startTime: formatTime(start), endTime: formatTime(end) };
+  const trimmed = value.trim();
+  // Standard format: 8:00am - 11:00am or 08:00-11:00 or 8.00-11.00 or 0800-1100
+  const match = trimmed.match(/^\s*(\d{1,2})[:.]?(\d{2})?\s*(am|pm)?\s*(?:[-–]|to)\s*(\d{1,2})[:.]?(\d{2})?\s*(am|pm)?\s*$/i);
+  if (match) {
+    const sharedMeridiem = match[6] ?? match[3];
+    const start = timeToMinutes(match[1], match[2] ?? "0", match[3] ?? sharedMeridiem);
+    const end = timeToMinutes(match[4], match[5] ?? "0", match[6] ?? sharedMeridiem);
+    if (start !== null && end !== null && end > start) {
+      return { startTime: formatTime(start), endTime: formatTime(end) };
+    }
+  }
+
+  // 4-digit military format without separators: e.g. 0800 - 1100
+  const militaryMatch = trimmed.match(/^\s*(\d{2})(\d{2})\s*[-–]\s*(\d{2})(\d{2})\s*$/);
+  if (militaryMatch) {
+    const start = timeToMinutes(militaryMatch[1], militaryMatch[2]);
+    const end = timeToMinutes(militaryMatch[3], militaryMatch[4]);
+    if (start !== null && end !== null && end > start) {
+      return { startTime: formatTime(start), endTime: formatTime(end) };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Basic heuristic parser for PDF timetable text extraction vs scanned OCR check
+ */
+function parsePdfDocument(contents: Uint8Array): ParsedImportRow[] {
+  const buffer = Buffer.from(contents);
+  if (buffer.subarray(0, 4).toString() !== "%PDF") {
+    throw new AppError("IMPORT_FILE_INVALID", "PDF signature is invalid", 400);
+  }
+
+  const textContent = buffer.toString("latin1");
+  // Extract visible ASCII strings from PDF stream
+  const asciiMatches = textContent.match(/[A-Za-z0-9\s:.,\-\/]{4,}/g) || [];
+  const combinedText = asciiMatches.join(" ");
+
+  if (combinedText.trim().length < 80) {
+    throw new AppError(
+      "SCANNED_PDF_DETECTED",
+      "The uploaded PDF appears to be a scanned document without selectable text. Please export to CSV/Excel or run OCR before uploading.",
+      422
+    );
+  }
+
+  // Find CSV/tabular-like structure in extracted text lines
+  const lines = combinedText.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+  const rows: string[][] = lines.map((line) => line.split(/[\t,|]/).map((c) => c.trim()));
+
+  const parsed = normalizeTable(rows);
+  if (parsed.length === 0) {
+    throw new AppError(
+      "PDF_PARSE_INCOMPLETE",
+      "Text extracted from PDF could not be automatically grouped into standard timetable columns. Please convert this PDF to CSV or Excel for precision.",
+      422
+    );
+  }
+
+  return parsed;
 }
 
 export async function parseTimetableFile(fileName: string, contents: Uint8Array): Promise<ParsedImportRow[]> {
@@ -123,7 +193,9 @@ export async function parseTimetableFile(fileName: string, contents: Uint8Array)
     }
     const parsed = Papa.parse<string[]>(text, { skipEmptyLines: "greedy", dynamicTyping: false });
     if (parsed.errors.length > 0) throw new AppError("CSV_PARSE_FAILED", parsed.errors[0].message, 400);
-    return normalizeTable(parsed.data.map((row) => row.map(cellString)));
+    const result = normalizeTable(parsed.data.map((row) => row.map(cellString)));
+    if (result.length === 0) throw new AppError("EMPTY_IMPORT", "The uploaded file has no tabular data", 400);
+    return result;
   }
 
   if (extension === "xlsx") {
@@ -133,22 +205,55 @@ export async function parseTimetableFile(fileName: string, contents: Uint8Array)
     try {
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(Buffer.from(contents) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
-      const worksheet = workbook.worksheets[0];
-      if (!worksheet) throw new AppError("EMPTY_IMPORT", "The workbook contains no worksheets", 400);
-      const rows: string[][] = [];
-      worksheet.eachRow({ includeEmpty: false }, (row) => {
-        const values: string[] = [];
-        row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
-          values[columnNumber - 1] = cellString(cell.value);
+      if (!workbook.worksheets || workbook.worksheets.length === 0) {
+        throw new AppError("EMPTY_IMPORT", "The workbook contains no worksheets", 400);
+      }
+
+      const allRows: ParsedImportRow[] = [];
+      let totalRowOffset = 0;
+
+      // Iterate across all worksheets in the workbook
+      for (const worksheet of workbook.worksheets) {
+        const rows: string[][] = [];
+        worksheet.eachRow({ includeEmpty: false }, (row) => {
+          const values: string[] = [];
+          row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
+            values[columnNumber - 1] = cellString(cell.value);
+          });
+          rows.push(values);
         });
-        rows.push(values);
-      });
-      return normalizeTable(rows);
+
+        if (rows.length > 0) {
+          const sheetRows = normalizeTable(rows, worksheet.name, totalRowOffset);
+          allRows.push(...sheetRows);
+          totalRowOffset += rows.length + 10;
+        }
+      }
+
+      if (allRows.length === 0) {
+        // If multi-sheet parsing didn't find headers, try sheet 0 directly to surface column error
+        const firstSheet = workbook.worksheets[0];
+        const rows: string[][] = [];
+        firstSheet.eachRow({ includeEmpty: false }, (row) => {
+          const values: string[] = [];
+          row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
+            values[columnNumber - 1] = cellString(cell.value);
+          });
+          rows.push(values);
+        });
+        return normalizeTable(rows);
+      }
+
+      return allRows;
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw new AppError("XLSX_PARSE_FAILED", "The XLSX workbook could not be parsed", 400);
     }
   }
 
-  throw new AppError("UNSUPPORTED_IMPORT_TYPE", "Only CSV and XLSX files are supported", 415);
+  if (extension === "pdf") {
+    return parsePdfDocument(contents);
+  }
+
+  throw new AppError("UNSUPPORTED_IMPORT_TYPE", "Only CSV, XLSX, and PDF files are supported", 415);
 }

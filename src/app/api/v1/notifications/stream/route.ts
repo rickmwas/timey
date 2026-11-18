@@ -1,30 +1,65 @@
 import { NextRequest } from "next/server";
 import { eventBus, ScheduleMutationEvent } from "@/server/events/event-bus";
+import { requireUser } from "@/server/middleware/require-user";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const cohortId = request.nextUrl.searchParams.get("cohortId");
-  const userId = request.nextUrl.searchParams.get("userId");
+  // 1. Strictly authenticate user session
+  let user;
+  try {
+    user = await requireUser(request);
+  } catch {
+    return new Response(JSON.stringify({ error: "Unauthorized access to SSE notification stream" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const queryCohortId = request.nextUrl.searchParams.get("cohortId");
+  const queryUserId = request.nextUrl.searchParams.get("userId");
+
+  // 2. Authorize scope: Students and lecturers cannot listen to arbitrary third-party users/cohorts
+  const isPrivileged = user.role === "ADMIN" || user.role === "TIMETABLE_OFFICER" || user.role === "DEAN";
+
+  // Effective cohort filter
+  const targetCohortId = isPrivileged ? (queryCohortId || user.cohortId) : user.cohortId;
+  // Effective user filter
+  const targetUserId = isPrivileged ? (queryUserId || user.id) : user.id;
 
   let isClosed = false;
 
   const stream = new ReadableStream({
     start(controller) {
       // 1. Send initial connected event
-      const initialPayload = `data: ${JSON.stringify({ type: "CONNECTED", message: "SSE connected to Timy Live Engine" })}\n\n`;
+      const initialPayload = `data: ${JSON.stringify({
+        type: "CONNECTED",
+        message: "SSE connected to Timy Live Engine",
+        userId: user.id,
+        role: user.role,
+      })}\n\n`;
       controller.enqueue(new TextEncoder().encode(initialPayload));
 
       // 2. Listener for schedule mutation broadcasts
       const handleMutation = (event: ScheduleMutationEvent) => {
         if (isClosed) return;
-        // Filter by cohort if specified
-        if (cohortId && event.cohortId && event.cohortId !== cohortId) {
-          return;
-        }
-        // Filter by recipient if specified
-        if (userId && event.recipientIds && !event.recipientIds.includes(userId)) {
-          return;
+
+        // Role-based recipient authorization
+        if (!isPrivileged) {
+          const isDirectRecipient = event.recipientIds && event.recipientIds.includes(targetUserId);
+          const isCohortMember = targetCohortId && event.cohortId === targetCohortId;
+
+          if (!isDirectRecipient && !isCohortMember) {
+            return;
+          }
+        } else {
+          // Privileged user filtered by query if provided
+          if (queryCohortId && event.cohortId && event.cohortId !== queryCohortId) {
+            return;
+          }
+          if (queryUserId && event.recipientIds && !event.recipientIds.includes(queryUserId)) {
+            return;
+          }
         }
 
         try {
@@ -37,7 +72,7 @@ export async function GET(request: NextRequest) {
 
       eventBus.on("SCHEDULE_MUTATION", handleMutation);
 
-      // 3. Keep-alive ping every 15 seconds to prevent mobile timeout
+      // 3. Keep-alive ping every 15 seconds to prevent timeout
       const keepAliveInterval = setInterval(() => {
         if (isClosed) {
           clearInterval(keepAliveInterval);

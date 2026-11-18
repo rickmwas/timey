@@ -17,6 +17,12 @@
   --color-navy-100: #e8f0fd;
   --color-navy-50: #f4f7fe;
 
+  --color-gold-600: #a37c15;
+  --color-gold-500: #c59b27;
+  --color-gold-400: #dfb547;
+  --color-gold-100: #fbf5e4;
+  --color-gold-50: #fdfbf3;
+
   --font-family-display: 'DM Serif Display', Georgia, serif;
   --font-family-body: 'Inter', system-ui, sans-serif;
 }

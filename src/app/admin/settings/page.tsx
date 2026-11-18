@@ -3,8 +3,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-
-import { UserManagement } from "@/legacy-pages/admin/UserManagement";
+import { AdminSystemSettings } from "@/legacy-pages/admin/AdminSystemSettings";
 
 export default function Page() {
   const { user } = useAuth();
@@ -20,6 +19,5 @@ export default function Page() {
     return null;
   }
 
-
-  return <UserManagement />;
+  return <AdminSystemSettings />;
 }
