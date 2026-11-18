@@ -12,8 +12,9 @@ coverage/
 # Build outputs
 .next/
 out/
-build/
 dist/
+build/
+.cache/
 *.tsbuildinfo
 
 # Logs

@@ -20,10 +20,11 @@ export class LocalFileStorage implements FileStorage {
     return destination;
   }
 
-  async put(key: string, contents: Uint8Array): Promise<void> {
+  async put(key: string, contents: Uint8Array): Promise<string> {
     const destination = this.resolveKey(key);
     await mkdir(dirname(destination), { recursive: true });
     await writeFile(destination, contents, { flag: "wx", mode: 0o600 });
+    return key;
   }
 
   async get(key: string): Promise<Uint8Array> {

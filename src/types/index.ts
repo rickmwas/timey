@@ -84,6 +84,9 @@ export interface User {
 
 export interface TimetableEntry {
   id: string;
+  occurrenceDate?: string;
+  effectiveDate?: string;
+  version?: number;
   courseId: string;
   course: Course;
   lecturerId: string;

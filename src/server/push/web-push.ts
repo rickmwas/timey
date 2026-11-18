@@ -81,7 +81,6 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
     return 0;
   }
 }
-
 /**
  * Send Web Push notification to all active devices of enrolled students in a cohort
  */
@@ -106,4 +105,3 @@ export async function sendPushToCohort(cohortId: string, payload: PushPayload): 
     return 0;
   }
 }
-

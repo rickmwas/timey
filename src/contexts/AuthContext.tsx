@@ -13,6 +13,8 @@ export interface AuthContextValue {
   isOffline: boolean;
   mode: 'live' | 'mock';
   error: string | null;
+  isLoading: boolean;
+  sessionError: string | null;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -47,6 +49,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isOffline, setIsOffline] = useState<boolean>(() => (typeof navigator !== 'undefined' ? !navigator.onLine : false));
   const [mode, setMode] = useState<'live' | 'mock'>('live');
   const [authError, setAuthError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [sessionError, setSessionError] = useState<string | null>(null);
 
   // Sync online / offline status
   useEffect(() => {
@@ -72,6 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (typeof window === 'undefined') return;
       if (!navigator.onLine) {
         setIsOffline(true);
+        setIsLoading(false);
         return;
       }
 
@@ -101,7 +106,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(null);
             persistUser(null);
           }
+        } else {
+          setSessionError(err instanceof Error ? err.message : "Could not verify your session");
         }
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
     }
 
@@ -199,6 +208,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isOffline,
         mode,
         error: authError,
+        isLoading,
+        sessionError,
       }}
     >
       {children}

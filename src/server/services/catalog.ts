@@ -19,6 +19,76 @@ export type VenueInput = {
   isUnderMaintenance?: boolean;
 };
 
+export async function listDepartments() {
+  return db.department.findMany({
+    where: { isActive: true },
+    orderBy: { name: "asc" },
+    include: {
+      _count: {
+        select: {
+          courses: { where: { isActive: true } },
+          cohorts: { where: { isActive: true } },
+          users: { where: { role: "LECTURER", status: "ACTIVE" } },
+        },
+      },
+    },
+  });
+}
+
+export async function getActiveAcademicPeriod() {
+  return db.academicPeriod.findFirst({
+    where: { isActive: true },
+    orderBy: { startDate: "desc" },
+    select: { id: true, name: true, year: true, semester: true, startDate: true, endDate: true },
+  });
+}
+
+export async function listCohorts() {
+  const cohorts = await db.cohort.findMany({
+    where: { isActive: true },
+    orderBy: { name: "asc" },
+    include: {
+      department: { select: { id: true, code: true, name: true, school: true } },
+      offerings: {
+        where: { isActive: true, period: { isActive: true } },
+        take: 1,
+        select: {
+          period: { select: { year: true, semester: true } },
+          _count: { select: { timetableEntries: { where: { status: "ACTIVE" } } } },
+        },
+      },
+    },
+  });
+
+  return cohorts.map(({ offerings, ...cohort }) => ({
+    ...cohort,
+    academicYear: offerings[0]?.period.year ?? null,
+    semester: offerings[0]?.period.semester ?? null,
+    classCount: offerings.reduce((total, offering) => total + offering._count.timetableEntries, 0),
+  }));
+}
+
+export async function listCourses() {
+  const courses = await db.course.findMany({
+    where: { isActive: true },
+    orderBy: { title: "asc" },
+    include: {
+      department: { select: { id: true, code: true, name: true, school: true } },
+      offerings: {
+        where: { isActive: true, period: { isActive: true } },
+        select: {
+          _count: { select: { timetableEntries: { where: { status: "ACTIVE" } } } },
+        },
+      },
+    },
+  });
+
+  return courses.map(({ offerings, ...course }) => ({
+    ...course,
+    scheduledSlots: offerings.reduce((total, offering) => total + offering._count.timetableEntries, 0),
+  }));
+}
+
 export async function listVenues(input: VenueListInput) {
   const rows = await db.venue.findMany({
     where: {

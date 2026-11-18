@@ -238,3 +238,8 @@ export function useTimetable() {
     refresh: fetchTimetable,
   };
 }
+
+export function useTimetableEntries() {
+  const { entries, isLoading, error, refresh } = useTimetable();
+  return { entries, isLoading, error, refresh };
+}

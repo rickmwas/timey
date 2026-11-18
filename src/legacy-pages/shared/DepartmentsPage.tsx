@@ -1,19 +1,25 @@
 "use client";
 
 import { useState } from 'react';
-import { Building2, Plus, Search } from 'lucide-react';
+import { Building2, Search } from 'lucide-react';
 import { Layout } from '../../components/layout/Layout';
 import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { useAuth } from '../../contexts/AuthContext';
-import { DEPARTMENTS, COURSES, COHORTS, USERS } from '../../data/mock';
+import { useApiCollection } from '../../hooks/use-api-collection';
+
+type CatalogDepartment = {
+  id: string;
+  code: string;
+  name: string;
+  school: string;
+  _count: { courses: number; cohorts: number; users: number };
+};
 
 export function DepartmentsPage() {
-  const { user } = useAuth();
-  const canManage = user?.role === 'ADMIN';
   const [search, setSearch] = useState('');
+  const { items: departments, isLoading, error } =
+    useApiCollection<CatalogDepartment>('/api/v1/catalog/departments');
 
-  const filtered = DEPARTMENTS.filter(d =>
+  const filtered = departments.filter(d =>
     !search ||
     d.name.toLowerCase().includes(search.toLowerCase()) ||
     d.code.toLowerCase().includes(search.toLowerCase())
@@ -24,9 +30,8 @@ export function DepartmentsPage() {
       <div className="mb-5 flex flex-col sm:flex-row sm:items-center gap-3">
         <div>
           <h1 className="font-display text-2xl text-slate-900">Departments</h1>
-          <p className="text-slate-500 text-sm">{DEPARTMENTS.length} departments</p>
+          <p className="text-slate-500 text-sm">{departments.length} departments</p>
         </div>
-        {canManage && <Button className="sm:ml-auto"><Plus size={16} /> Add Department</Button>}
       </div>
 
       <div className="relative mb-5 max-w-sm">
@@ -34,11 +39,11 @@ export function DepartmentsPage() {
         <input type="search" placeholder="Search departments..." value={search} onChange={e => setSearch(e.target.value)} className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#3b6fd4]" />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {error && <p className="mb-4 text-sm text-red-700" role="alert">{error}</p>}
+      {isLoading ? (
+        <Card className="py-12 text-center"><p role="status" className="text-sm text-slate-500">Loading departments…</p></Card>
+      ) : <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {filtered.map(d => {
-          const courseCount = COURSES.filter(c => c.departmentId === d.id).length;
-          const cohortCount = COHORTS.filter(c => c.departmentId === d.id).length;
-          const lecturerCount = USERS.filter(u => u.departmentId === d.id && u.role === 'LECTURER').length;
           return (
             <Card key={d.id} className="hover:shadow-md transition-shadow">
               <div className="flex items-start gap-3 mb-4">
@@ -56,9 +61,9 @@ export function DepartmentsPage() {
 
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { label: 'Courses', value: courseCount },
-                  { label: 'Cohorts', value: cohortCount },
-                  { label: 'Lecturers', value: lecturerCount },
+                  { label: 'Courses', value: d._count.courses },
+                  { label: 'Cohorts', value: d._count.cohorts },
+                  { label: 'Lecturers', value: d._count.users },
                 ].map(s => (
                   <div key={s.label} className="bg-slate-50 rounded-lg p-2 text-center">
                     <p className="text-lg font-bold text-slate-900">{s.value}</p>
@@ -70,6 +75,7 @@ export function DepartmentsPage() {
           );
         })}
       </div>
+      }
     </Layout>
   );
 }
