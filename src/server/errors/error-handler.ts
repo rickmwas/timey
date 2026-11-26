@@ -24,6 +24,21 @@ export function handleApiError(error: unknown) {
     }
   }
 
-  console.error("Unhandled API error", error instanceof Error ? error.name : "UnknownError");
-  return failureResponse("INTERNAL_ERROR", "An unexpected error occurred", 500);
+  if (error instanceof Prisma.PrismaClientInitializationError) {
+    console.error("[Database Connection Error]:", error.message);
+    return failureResponse(
+      "DATABASE_CONNECTION_ERROR",
+      process.env.NODE_ENV === "development"
+        ? `Database connection failed: ${error.message}`
+        : "Could not connect to database server. Verify DATABASE_URL in Vercel environment variables.",
+      500,
+    );
+  }
+
+  console.error("Unhandled API error:", error);
+  return failureResponse(
+    "INTERNAL_ERROR",
+    process.env.NODE_ENV === "development" && error instanceof Error ? error.message : "An unexpected error occurred",
+    500,
+  );
 }
