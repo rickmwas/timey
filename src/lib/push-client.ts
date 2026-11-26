@@ -45,7 +45,10 @@ export async function subscribeToWebPush(customVapidKey?: string): Promise<{ suc
     }
 
     // 2. Fetch or use VAPID Public Key
-    const vapidKey = customVapidKey || process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';
+    const vapidKey = customVapidKey || process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    if (!vapidKey) {
+      return { success: false, error: 'VAPID public key is not configured.' };
+    }
 
     const registration = await navigator.serviceWorker.ready;
     const applicationServerKey = urlBase64ToUint8Array(vapidKey);
@@ -56,7 +59,7 @@ export async function subscribeToWebPush(customVapidKey?: string): Promise<{ suc
       applicationServerKey: applicationServerKey as BufferSource,
     });
 
-    // 4. Send subscription JSON to backend
+    // 4. Send subscription JSON to backend (both root & nested for maximum compatibility)
     const subJson = subscription.toJSON();
     const res = await fetch('/api/v1/push/subscribe', {
       method: 'POST',
@@ -66,6 +69,13 @@ export async function subscribeToWebPush(customVapidKey?: string): Promise<{ suc
         keys: {
           p256dh: subJson.keys?.p256dh,
           auth: subJson.keys?.auth,
+        },
+        subscription: {
+          endpoint: subJson.endpoint,
+          keys: {
+            p256dh: subJson.keys?.p256dh,
+            auth: subJson.keys?.auth,
+          },
         },
       }),
     });

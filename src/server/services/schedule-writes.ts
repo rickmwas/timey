@@ -12,7 +12,7 @@ import { detectSlotConflicts, type SlotLike } from "@/server/services/conflicts"
 import { buildNotificationMessage, buildScheduleChangeMetadata, type ScheduleChangeType as ScheduleChangeLabel } from "@/server/services/schedule-ops";
 import { createNotificationBatch } from "@/server/services/notifications";
 import { eventBus } from "@/server/events/event-bus";
-import { sendPushToCohort } from "@/server/push/web-push";
+import { sendPushToCohort, sendPushToRecipients } from "@/server/push/web-push";
 
 type MutationAction = "reschedule" | "cancel" | "postpone";
 type MutationInput = {
@@ -205,8 +205,9 @@ export async function writeScheduleChange(
     throw new AppError("IDEMPOTENCY_KEY_REQUIRED", "Provide an Idempotency-Key header of at most 128 characters", 400);
   }
 
+  let pendingSideEffects: (() => void) | null = null;
   try {
-    return await db.$transaction(async (transaction) => {
+    const result = await db.$transaction(async (transaction) => {
       const entry = await transaction.timetableEntry.findUnique({
         where: { id: entryId },
         include: {
@@ -378,10 +379,28 @@ export async function writeScheduleChange(
 
       const recipients = await transaction.user.findMany({
         where: { cohortId: entry.offering.cohortId, role: Role.STUDENT, status: "ACTIVE" },
-        select: { id: true },
+        select: { id: true, cohortId: true },
       });
+
+      // Also include any elective/retake students enrolled in this offering
+      const individualEnrollments = await transaction.studentEnrollment.findMany({
+        where: { offeringId: entry.offeringId, status: "ENROLLED" },
+        select: { studentId: true, student: { select: { id: true, cohortId: true } } },
+      });
+
+      const affectedCohortIds = Array.from(new Set([
+        entry.offering.cohortId,
+        ...recipients.map((r) => r.cohortId).filter(Boolean) as string[],
+        ...individualEnrollments.map((e) => e.student.cohortId).filter(Boolean) as string[],
+      ]));
+
+      const allRecipientIds = Array.from(new Set([
+        ...recipients.map((r) => r.id),
+        ...individualEnrollments.map((e) => e.studentId),
+      ]));
+
       const notificationTypeValue = notificationType(changeType);
-      const notificationCount = await createNotificationBatch(transaction, recipients.map(({ id }) => ({
+      const notificationCount = await createNotificationBatch(transaction, allRecipientIds.map((id) => ({
           recipientId: id,
           sourceChangeId: change.id,
           title: `${entry.offering.course.code}: ${changeType.replaceAll("_", " ").toLowerCase()}`,
@@ -389,33 +408,72 @@ export async function writeScheduleChange(
           type: notificationTypeValue,
         })));
 
-      // Broadcast to live SSE stream for real-time mobile ringing & lockscreen push
-      eventBus.emitMutation({
-        type: action === "cancel" ? "CANCELLED" : "RESCHEDULED",
-        entryId,
-        courseCode: entry.offering.course.code,
-        courseTitle: entry.offering.course.title,
-        oldVenue: entry.venue.code,
-        newVenue: next.venueId ?? entry.venue.code,
-        day: next.day,
-        startTime: next.startTime ?? undefined,
-        endTime: next.endTime ?? undefined,
-        reason: input.reason,
-        cohortId: entry.offering.cohortId,
-        recipientIds: recipients.map((r) => r.id),
-        message,
+      // Transactional Outbox record to guarantee reliable event publication
+      await transaction.outboxEvent.create({
+        data: {
+          aggregateType: "ScheduleChange",
+          aggregateId: change.id,
+          eventType: "SCHEDULE_MUTATION",
+          payload: {
+            type: action === "cancel" ? "CANCELLED" : "RESCHEDULED",
+            entryId,
+            courseCode: entry.offering.course.code,
+            courseTitle: entry.offering.course.title,
+            oldVenue: entry.venue.code,
+            newVenue: next.venueId ?? entry.venue.code,
+            day: next.day,
+            startTime: next.startTime ?? undefined,
+            endTime: next.endTime ?? undefined,
+            reason: input.reason,
+            cohortId: entry.offering.cohortId,
+            cohortIds: affectedCohortIds,
+            recipientIds: allRecipientIds,
+            message,
+          },
+        },
       });
 
-      // Dispatch native Web Push to student devices (lockscreen waking)
-      sendPushToCohort(entry.offering.cohortId, {
-        title: `${entry.offering.course.code}: ${changeType.replaceAll("_", " ").toLowerCase()}`,
-        message,
-        url: "/timetable",
-        tag: `schedule-change-${entryId}`,
-      }).catch((err) => console.warn("[ScheduleWrites] Web push notice:", err));
+      // Store post-commit side effects
+      pendingSideEffects = () => {
+        eventBus.emitMutation({
+          type: action === "cancel" ? "CANCELLED" : "RESCHEDULED",
+          entryId,
+          courseCode: entry.offering.course.code,
+          courseTitle: entry.offering.course.title,
+          oldVenue: entry.venue.code,
+          newVenue: next.venueId ?? entry.venue.code,
+          day: next.day,
+          startTime: next.startTime ?? undefined,
+          endTime: next.endTime ?? undefined,
+          reason: input.reason,
+          cohortId: entry.offering.cohortId,
+          cohortIds: affectedCohortIds,
+          recipientIds: allRecipientIds,
+          message,
+        });
+
+        // Broadcast Web Push to all student devices across cohorts
+        sendPushToRecipients(allRecipientIds, {
+          title: `${entry.offering.course.code}: ${changeType.replaceAll("_", " ").toLowerCase()}`,
+          message,
+          url: "/timetable",
+          tag: `schedule-change-${entryId}`,
+        }).catch((err) => console.warn("[ScheduleWrites] Web push notice:", err));
+      };
 
       return { change, override, notificationCount, replayed: false };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+    // Execute side-effects strictly AFTER database transaction has committed cleanly
+    if (typeof pendingSideEffects === "function") {
+      try {
+        (pendingSideEffects as () => void)();
+      } catch (err) {
+        console.warn("[ScheduleWrites] Post-commit side-effect dispatch error:", err);
+      }
+    }
+
+    return result;
   } catch (error) {
     if (error instanceof AppError) throw error;
     if (error instanceof Prisma.PrismaClientKnownRequestError && ["P2002", "P2034"].includes(error.code)) {

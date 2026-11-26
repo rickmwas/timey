@@ -75,6 +75,18 @@ export const apiClient = {
         body: JSON.stringify({ identifier, password }),
       }),
 
+    register: (data: {
+      fullName: string;
+      email: string;
+      institutionalId: string;
+      password: string;
+      cohortId: string;
+    }) =>
+      apiFetch<{ user: any }>("/api/v1/auth/register", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
     logout: () =>
       apiFetch<{ message: string }>("/api/v1/auth/logout", {
         method: "POST",
@@ -90,6 +102,11 @@ export const apiClient = {
         method: "POST",
         body: JSON.stringify({ currentPassword, nextPassword }),
       }),
+  },
+
+  // Academic Catalog
+  catalog: {
+    cohorts: () => apiFetch<{ items: any[] }>("/api/v1/catalog/cohorts"),
   },
 
   // Timetables & Scheduling

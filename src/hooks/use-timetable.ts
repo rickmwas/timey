@@ -218,6 +218,18 @@ export function useTimetable() {
       .sort((a, b) => a.startTime.localeCompare(b.startTime));
   }, [entries, todayDay]);
 
+  const currentClass = useMemo(() => {
+    const now = new Date();
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+    return todayEntries.find(e => {
+      const [sh, sm] = e.startTime.split(':').map(Number);
+      const [eh, em] = e.endTime.split(':').map(Number);
+      const start = sh * 60 + sm;
+      const end = eh * 60 + em;
+      return start <= nowMins && nowMins < end;
+    });
+  }, [todayEntries]);
+
   const nextClass = useMemo(() => {
     const now = new Date();
     const nowMins = now.getHours() * 60 + now.getMinutes();
@@ -227,10 +239,19 @@ export function useTimetable() {
     });
   }, [todayEntries]);
 
+  const scheduleState = useMemo(() => {
+    if (currentClass) return 'IN_SESSION' as const;
+    if (nextClass) return 'UPCOMING' as const;
+    if (todayEntries.length > 0) return 'COMPLETED' as const;
+    return 'NO_CLASSES' as const;
+  }, [currentClass, nextClass, todayEntries]);
+
   return {
     entries,
     todayEntries,
+    currentClass,
     nextClass,
+    scheduleState,
     isLoading,
     isOffline,
     lastSyncedAt,

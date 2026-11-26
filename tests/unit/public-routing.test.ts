@@ -19,7 +19,7 @@ describe("public route access", () => {
     expect(getRouteRedirect(undefined, "/dashboard")).toBe("/login");
   });
 
-  it.each<UserRole>(["ADMIN", "TIMETABLE_OFFICER", "LECTURER", "STUDENT"])(
+  it.each<UserRole>(["ADMIN", "TIMETABLE_OFFICER", "COD", "DEAN", "LECTURER", "STUDENT"])(
     "sends signed in %s users from public pages to their role home",
     (role) => {
       expect(getRouteRedirect(role, "/")).toBe("/dashboard");

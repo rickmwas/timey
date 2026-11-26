@@ -12,6 +12,7 @@ export interface ScheduleMutationEvent {
   endTime?: string;
   reason?: string;
   cohortId?: string;
+  cohortIds?: string[];
   recipientIds?: string[];
   message: string;
   timestamp: string;

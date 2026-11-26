@@ -3,17 +3,21 @@ import { apiHandler } from "@/server/http/route";
 import { successResponse, failureResponse } from "@/server/http/responses";
 import { requireUser } from "@/server/middleware/require-user";
 import { db } from "@/lib/db";
+import { AppError } from "@/server/errors/app-error";
 
 export const POST = apiHandler(async (request: NextRequest) => {
   const user = await requireUser(request);
   const body = await request.json();
-  const { subscription } = body;
 
-  if (!subscription || !subscription.endpoint || !subscription.keys) {
+  // Accept either nested { subscription: { endpoint, keys } } or flat { endpoint, keys }
+  const subscription = body.subscription || body;
+  const endpoint = subscription.endpoint;
+  const keys = subscription.keys;
+
+  if (!endpoint || !keys) {
     return failureResponse("INVALID_SUBSCRIPTION", "Push subscription object is malformed", 400);
   }
 
-  const { endpoint, keys } = subscription;
   const { p256dh, auth } = keys;
 
   if (!p256dh || !auth) {
@@ -42,24 +46,30 @@ export const POST = apiHandler(async (request: NextRequest) => {
 
     return successResponse({ subscribed: true, id: record.id });
   } catch (error: any) {
-    console.warn("[PushSubscribe] DB error, returning graceful response:", error?.message);
-    return successResponse({ subscribed: true, fallback: true });
+    console.error("[PushSubscribe] DB error saving subscription:", error?.message);
+    throw new AppError("INTERNAL_ERROR", "Failed to save push subscription to database", 500);
   }
 });
 
 export const DELETE = apiHandler(async (request: NextRequest) => {
-  await requireUser(request);
+  const user = await requireUser(request);
   const body = await request.json();
   const { endpoint } = body;
 
-  if (endpoint) {
-    try {
-      await db.pushSubscription.deleteMany({
-        where: { endpoint },
-      });
-    } catch {
-      // Ignore
-    }
+  if (!endpoint) {
+    return failureResponse("VALIDATION_ERROR", "Endpoint is required for unsubscription", 400);
+  }
+
+  try {
+    await db.pushSubscription.deleteMany({
+      where: {
+        endpoint,
+        userId: user.id,
+      },
+    });
+  } catch (error: any) {
+    console.error("[PushUnsubscribe] DB error removing subscription:", error?.message);
+    throw new AppError("INTERNAL_ERROR", "Failed to remove push subscription", 500);
   }
 
   return successResponse({ unsubscribed: true });
