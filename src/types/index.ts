@@ -1,4 +1,4 @@
-export type Role = 'STUDENT' | 'LECTURER' | 'TIMETABLE_OFFICER' | 'ADMIN';
+export type Role = 'STUDENT' | 'LECTURER' | 'COD' | 'DEAN' | 'TIMETABLE_OFFICER' | 'ADMIN';
 
 export type TimetableStatus = 'ACTIVE' | 'RESCHEDULED' | 'CANCELLED' | 'MOVED';
 
@@ -84,6 +84,9 @@ export interface User {
 
 export interface TimetableEntry {
   id: string;
+  occurrenceDate?: string;
+  effectiveDate?: string;
+  version?: number;
   courseId: string;
   course: Course;
   lecturerId: string;
@@ -160,4 +163,6 @@ export interface AuthUser {
   email: string;
   role: Role;
   cohortId?: string;
+  departmentId?: string;
+  schoolId?: string;
 }

@@ -3,42 +3,55 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { canAccessRoute, ROLE_HOME } from "@/lib/auth/permissions";
+import {
+  getRouteRedirect,
+  isPublicRoute,
+} from "@/lib/auth/permissions";
 
 export function RoleGuard({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { user } = useAuth();
+  const { user, isLoading, sessionError } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
+  const isPublic = isPublicRoute(pathname);
+  const redirect = getRouteRedirect(user?.role, pathname);
 
   useEffect(() => {
-    if (!user) {
-      if (pathname !== "/") {
-        router.replace("/");
-      }
-      return;
-    }
+    if (isLoading || sessionError || !redirect) return;
+    router.replace(redirect);
+  }, [isLoading, sessionError, redirect, router]);
 
-    if (!canAccessRoute(user.role, pathname)) {
-      router.replace(ROLE_HOME[user.role]);
-    }
-  }, [user, pathname, router]);
-
-  // The login page is public and must remain visible
-  // when no user session exists.
-  if (!user) {
-    if (pathname === "/") {
-      return <>{children}</>;
-    }
-
-    return null;
+  if (isLoading && !isPublic) {
+    return (
+      <main className="grid min-h-screen place-items-center" role="status">
+        Restoring your session…
+      </main>
+    );
   }
 
-  if (!canAccessRoute(user.role, pathname)) {
-    return null;
+  if (sessionError && !isPublic) {
+    return (
+      <main className="grid min-h-screen place-items-center p-6">
+        <p className="max-w-md text-center text-sm text-red-700" role="alert">
+          Could not verify your session. {sessionError} Please reload the page and try again.
+        </p>
+      </main>
+    );
+  }
+
+  if (isPublic && !user) {
+    return <>{children}</>;
+  }
+
+  if (redirect) {
+    return (
+      <main className="grid min-h-screen place-items-center" role="status">
+        {user ? "Redirecting to your dashboard…" : "Redirecting to sign in…"}
+      </main>
+    );
   }
 
   return <>{children}</>;

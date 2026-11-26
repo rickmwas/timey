@@ -2,6 +2,9 @@
 @import 'tailwindcss';
 
 @theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
   --color-navy-950: #0d1b3e;
   --color-navy-900: #1a2f5c;
   --color-navy-800: #1e3a6e;
@@ -13,6 +16,12 @@
   --color-navy-200: #ccdaf8;
   --color-navy-100: #e8f0fd;
   --color-navy-50: #f4f7fe;
+
+  --color-gold-600: #a37c15;
+  --color-gold-500: #c59b27;
+  --color-gold-400: #dfb547;
+  --color-gold-100: #fbf5e4;
+  --color-gold-50: #fdfbf3;
 
   --font-family-display: 'DM Serif Display', Georgia, serif;
   --font-family-body: 'Inter', system-ui, sans-serif;

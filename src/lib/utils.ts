@@ -87,6 +87,8 @@ export const STATUS_DOT: Record<TimetableStatus, string> = {
 export const ROLE_LABEL: Record<Role, string> = {
   STUDENT: 'Student',
   LECTURER: 'Lecturer',
+  COD: 'Head of Department',
+  DEAN: 'Dean of School',
   TIMETABLE_OFFICER: 'Timetable Officer',
   ADMIN: 'Administrator',
 };
@@ -94,6 +96,8 @@ export const ROLE_LABEL: Record<Role, string> = {
 export const ROLE_COLOR: Record<Role, string> = {
   STUDENT: 'bg-sky-100 text-sky-800',
   LECTURER: 'bg-violet-100 text-violet-800',
+  COD: 'bg-emerald-100 text-emerald-800',
+  DEAN: 'bg-indigo-100 text-indigo-800',
   TIMETABLE_OFFICER: 'bg-amber-100 text-amber-800',
   ADMIN: 'bg-rose-100 text-rose-800',
 };

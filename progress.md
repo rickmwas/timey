@@ -29,6 +29,14 @@
 - [x] Configured minimal baseline: `package.json`, `tsconfig.json`, `tailwind.config.ts`, `.env`, and relational `prisma/schema.prisma`.
 - [x] Completed **Milestone 1.1**: Minimal project scaffolding & dependency installation (frontend held off per user direction).
 - [x] Completed **Milestone 1.2**: Prisma Client generation & schema validation (`npx prisma generate` clean, 0 TypeScript errors).
+- [x] Completed **DevOps Foundation (Dev 4 Platform/Ops)**:
+  - Multi-job GitHub Actions CI/CD pipeline (`.github/workflows/ci.yml`) enforcing lint, typecheck, prisma schema validation, Vitest test suite, and production build checks.
+  - Team Pull Request template (`.github/pull_request_template.md`) structured around the 4 developer ownership roles and golden rules.
+  - Issue templates for bug reports, feature requests, and domain-specific timetable clashes (`.github/ISSUE_TEMPLATE/`).
+  - Automated weekly dependency vulnerability alerts (`.github/dependabot.yml`).
+  - Multi-stage Dockerfile with Next.js standalone output and `.dockerignore`.
+  - Team development `docker-compose.yml` with PostgreSQL 15 and Adminer database management UI.
+  - Vitest test runner configuration and baseline smoke test suite (`npm test` green).
 
 ---
 

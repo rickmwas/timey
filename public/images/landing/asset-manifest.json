@@ -1,0 +1,62 @@
+{
+  "assets": [
+    {
+      "file": "timy-social-card.png",
+      "source": "Created for the Timy landing page using the existing brand palette and a synthetic timetable visual.",
+      "creator": "Timy project",
+      "license": "Project-created asset",
+      "alt": "Timy academic timetable and venue management",
+      "attributionRequirement": "No external photographs or third-party visual assets are included.",
+      "focalPoint": "Center",
+      "use": "Local 1200 by 630 Open Graph and Twitter social preview image.",
+      "changes": "Generated with generic sample timetable information."
+    },
+    {
+      "file": "logo4.png",
+      "source": "Provided as a local Timy project asset.",
+      "creator": "Timy project",
+      "license": "Project-provided logo",
+      "alt": "Timy, Kisii University",
+      "attributionRequirement": "No external attribution details were provided.",
+      "focalPoint": "Center",
+      "use": "Official logo in the public landing page navigation.",
+      "changes": "Cropped responsively to fit the navigation bar."
+    },
+    {
+      "file": "campus.jpg",
+      "source": "https://commons.wikimedia.org/wiki/File:Strathmore_University_Keri_Campus.jpg",
+      "creator": "Strathmore University Kenya",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "alt": "Aerial view of a university campus in Kenya",
+      "attributionRequirement": "Creator and license are credited together in the landing page footer.",
+      "focalPoint": "Center",
+      "use": "Landing page hero image, identified as illustrative campus photography and not as Kisii University.",
+      "changes": "Cropped responsively by the browser."
+    },
+    {
+      "file": "lecture-hall.jpg",
+      "source": "https://commons.wikimedia.org/wiki/File:University_of_Limpopo_Lecture_Hall.jpg",
+      "creator": "Uthusitse",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "alt": "Students seated in a university lecture hall",
+      "attributionRequirement": "Creator and license are credited together in the landing page footer.",
+      "focalPoint": "Center",
+      "use": "Illustrative learning venue image in the Timy workflow section.",
+      "changes": "Cropped responsively by the browser."
+    },
+    {
+      "file": "classroom.jpg",
+      "source": "https://commons.wikimedia.org/wiki/File:Professor_teaching_students_in_a_Tennessee_university_classroom.jpg",
+      "creator": "Harrison Keely",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "alt": "A lecturer teaching a group of students in a university classroom",
+      "attributionRequirement": "Creator and license are credited together in the landing page footer.",
+      "focalPoint": "Center",
+      "use": "Illustrative teaching space image in the lecturer section.",
+      "changes": "Resized to 1600 by 1067 pixels and recompressed as JPEG at quality 82."
+    }
+  ]
+}
